@@ -41,7 +41,7 @@ def _find_binary() -> str | None:
     patterns = [
         os.path.join(
             home,
-            "Library/Application Support/JetBrains/*/plugins/"
+            "Library/Application Support/JetBrains/IntellijIdea2025.3/*/plugins/"
             "github-copilot-intellij/copilot-agent/native/darwin-arm64/"
             "copilot-language-server",
         ),
