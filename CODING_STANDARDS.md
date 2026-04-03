@@ -92,8 +92,22 @@ When something fails:
 - Integration tests should cover real protocol interactions where feasible.
 - Tests verify behavior, not implementation details.
 - No hardcoded paths, user IDs, or environment-specific values in tests.
-- Tests that depend on external binaries not present in all environments
-  may use `skipif` with a clear reason explaining the dependency.
+
+### No Skips
+
+Tests must not use `skipif` or `pytest.skip()`. A test that cannot run is
+asserting that the environment is misconfigured — that assertion should
+surface as a failure, not be silently suppressed.
+
+Skipping masks environment problems. A test suite that passes with half its
+tests skipped looks green but proves nothing. The painful short-term path
+(failing loudly when the environment is wrong) is the correct long-term path
+(environments get fixed and stay fixed because breakage is visible).
+
+When a test depends on an external resource (binary, service, credential):
+- The test should fail with a clear message explaining what is missing.
+- Use a fixture that asserts the resource exists and returns it.
+- Do not provide a "success path" that avoids the dependency.
 
 ## Python Conventions
 

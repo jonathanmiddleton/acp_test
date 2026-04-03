@@ -1,8 +1,9 @@
 """
-Integration test: runs the full proxy against the real copilot-language-server.
+Integration tests: run the full proxy against the real copilot-language-server.
 
-This test is skipped if the binary cannot be found (e.g., in CI).
-Run it explicitly with: pytest tests/test_integration.py -v
+These tests assert that the environment has a compatible binary available.
+If the binary is not found, the tests FAIL — not skip. A missing binary
+means the environment is misconfigured, and skipping would mask that.
 """
 
 from __future__ import annotations
@@ -10,59 +11,37 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess
-import sys
 
 import pytest
 import httpx
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 from acp_proxy.client import AcpClient
+from acp_proxy.discovery import find_binary
 
 
-def _find_binary() -> str | None:
-    """Locate the copilot-language-server binary."""
-    try:
-        out = subprocess.check_output(
-            ["ps", "-eo", "command"], text=True, stderr=subprocess.DEVNULL
-        )
-        for line in out.splitlines():
-            if "copilot-language-server" in line and "grep" not in line:
-                parts = line.split(" --")
-                return parts[0].strip()
-    except Exception:
-        pass
+@pytest.fixture(scope="module")
+def binary() -> str:
+    """Resolve the compatible copilot-language-server binary.
 
-    import glob
-
-    home = os.path.expanduser("~")
-    patterns = [
-        os.path.join(
-            home,
-            "Library/Application Support/JetBrains/IntellijIdea2025.3/*/plugins/"
-            "github-copilot-intellij/copilot-agent/native/darwin-arm64/"
-            "copilot-language-server",
-        ),
-    ]
-    for pattern in patterns:
-        matches = glob.glob(pattern)
-        if matches:
-            matches.sort(key=os.path.getmtime, reverse=True)
-            return matches[0]
-    return None
-
-
-BINARY = _find_binary()
-SKIP_REASON = "copilot-language-server not found"
+    Fails the test session if no compatible binary is found. This is
+    intentional — the environment must have the IntelliJ 2025.3 Copilot
+    plugin installed with its bundled language server.
+    """
+    result = find_binary()
+    assert result is not None, (
+        "No compatible copilot-language-server binary found. "
+        "The environment must have the IntelliJ IDEA 2025.3 Copilot plugin "
+        "installed. Only the binary bundled with that plugin is supported."
+    )
+    assert os.path.isfile(result), f"Discovered binary path does not exist: {result}"
+    assert os.access(result, os.X_OK), f"Discovered binary is not executable: {result}"
+    return result
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(BINARY is None, reason=SKIP_REASON)
-async def test_acp_client_initialize_and_discover_models():
+async def test_acp_client_initialize_and_discover_models(binary: str):
     """Start the ACP client and verify initialization + model discovery."""
-    client = AcpClient(BINARY)
+    client = AcpClient(binary)
     try:
         await client.start()
         session_id = await client.create_session(os.getcwd())
@@ -73,17 +52,15 @@ async def test_acp_client_initialize_and_discover_models():
         assert client.agent_info["name"] is not None
 
         model_ids = [m.model_id for m in client.models]
-        # Should have at least one model
         assert len(model_ids) >= 1
     finally:
         await client.stop()
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(BINARY is None, reason=SKIP_REASON)
-async def test_acp_client_prompt_and_stream():
+async def test_acp_client_prompt_and_stream(binary: str):
     """Send a prompt and verify streaming response."""
-    client = AcpClient(BINARY)
+    client = AcpClient(binary)
     try:
         await client.start()
         session_id = await client.create_session(os.getcwd())
@@ -115,12 +92,11 @@ async def test_acp_client_prompt_and_stream():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(BINARY is None, reason=SKIP_REASON)
-async def test_full_proxy_http_roundtrip():
+async def test_full_proxy_http_roundtrip(binary: str):
     """Start the full proxy and make an HTTP request against it."""
     from acp_proxy.server import create_app
 
-    client = AcpClient(BINARY)
+    client = AcpClient(binary)
     try:
         await client.start()
         await client.create_session(os.getcwd())
@@ -158,10 +134,9 @@ async def test_full_proxy_http_roundtrip():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(BINARY is None, reason=SKIP_REASON)
-async def test_model_switching():
+async def test_model_switching(binary: str):
     """Verify that session/set_model actually changes the active model."""
-    client = AcpClient(BINARY)
+    client = AcpClient(binary)
     try:
         await client.start()
         session_id = await client.create_session(os.getcwd())
@@ -169,9 +144,16 @@ async def test_model_switching():
         # Pick a model different from the default
         default = client.default_model
         available = [m.model_id for m in client.models]
-        other = next((m for m in available if m != default), None)
-        if other is None:
-            pytest.skip("Only one model available, cannot test switching")
+
+        # If there's only one model, that's an environment problem — not
+        # something to skip over. Model switching is a required capability.
+        assert len(available) >= 2, (
+            f"Only one model available ({available}). "
+            "Model switching requires at least two models. "
+            "Check that the Copilot subscription has access to multiple models."
+        )
+
+        other = next(m for m in available if m != default)
 
         # Switch model
         await client.set_model(session_id, other)
