@@ -19,6 +19,19 @@ from .transport import AcpError, AcpTransport
 logger = logging.getLogger(__name__)
 
 
+def _summarize(obj: Any, max_len: int = 200) -> str:
+    """Summarize an object for logging — truncate long values."""
+    import json
+
+    try:
+        s = json.dumps(obj, default=str)
+    except Exception:
+        s = repr(obj)
+    if len(s) > max_len:
+        return s[:max_len] + f"... ({len(s)} chars)"
+    return s
+
+
 @dataclass
 class ModelInfo:
     """A model available through the ACP agent."""
@@ -252,36 +265,64 @@ class AcpClient:
             f"Tried: {[m for m, _ in methods]}. Requested model: {model_id}"
         )
 
+    @staticmethod
+    def _extract_text(content: str | list[dict[str, Any]] | None) -> str:
+        """Extract plain text from an OpenAI message content field."""
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    parts.append(block["text"])
+            return "\n".join(parts)
+        return ""
+
+    @staticmethod
+    def extract_last_user_message(messages: list[dict[str, Any]]) -> str:
+        """Extract the final user message from an OpenAI messages array.
+
+        The ACP session is stateful and accumulates context across turns.
+        OpenCode sends the full conversation history with every request.
+        Forwarding the full history would duplicate context already in the
+        session. We extract only the last user message — the new content
+        for this turn.
+        """
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                return AcpClient._extract_text(msg.get("content"))
+        # Fallback: if no user message, concatenate everything
+        return "\n\n".join(
+            AcpClient._extract_text(m.get("content"))
+            for m in messages
+            if AcpClient._extract_text(m.get("content"))
+        )
+
+    @staticmethod
+    def extract_first_user_message(messages: list[dict[str, Any]]) -> str:
+        """Extract the first user message — the conversation anchor.
+
+        Used to derive a stable session identifier: the first user message
+        is the same across all turns of a conversation (OpenCode replays
+        the full history each time). Hashing it gives a stable key.
+        """
+        for msg in messages:
+            if msg.get("role") == "user":
+                return AcpClient._extract_text(msg.get("content"))
+        return ""
+
     def _messages_to_prompt(
         self, messages: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
         """Convert OpenAI messages array to ACP prompt content blocks.
 
-        ACP prompts are a flat list of content blocks for a single turn.
-        We concatenate all message content, with system messages prepended
-        as context.
+        Extracts only the last user message. The ACP session maintains
+        its own conversation history — we do not replay prior turns.
         """
-        parts: list[str] = []
-
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-
-            if isinstance(content, list):
-                # Handle content array format
-                for block in content:
-                    if block.get("type") == "text":
-                        parts.append(block["text"])
-            elif isinstance(content, str) and content:
-                if role == "system":
-                    parts.append(f"[System]: {content}")
-                elif role == "assistant":
-                    parts.append(f"[Previous response]: {content}")
-                else:
-                    parts.append(content)
-
-        combined = "\n\n".join(parts)
-        return [{"type": "text", "text": combined}]
+        text = self.extract_last_user_message(messages)
+        return [{"type": "text", "text": text}]
 
     def _handle_notification(self, msg: dict[str, Any]) -> None:
         """Route incoming notifications to the appropriate session queue."""
@@ -290,9 +331,16 @@ class AcpClient:
 
         if method == "session/update":
             session_id = params.get("sessionId", "")
+            update = params.get("update", {})
+            update_type = update.get("sessionUpdate", "unknown")
+            # Log tool_call updates at INFO so we can see what the LSP
+            # is doing with tools — this is critical for understanding
+            # the tool execution model.
+            if update_type in ("tool_call", "tool_call_update"):
+                logger.info("Tool activity [%s]: %s", update_type, _summarize(update))
             queue = self._update_queues.get(session_id)
             if queue:
-                queue.put_nowait(params.get("update", {}))
+                queue.put_nowait(update)
 
     def _handle_agent_request(self, msg: dict[str, Any]) -> Any:
         """Handle incoming requests from the agent.
@@ -309,27 +357,30 @@ class AcpClient:
         method = msg.get("method", "")
         params = msg.get("params", {})
 
-        logger.info("Agent request: %s", method)
+        logger.info("Agent request: %s params=%s", method, _summarize(params))
 
-        if method == "session/request_permission":
-            return self._handle_permission_request(params)
-        elif method == "fs/read_text_file":
-            return self._handle_read_file(params)
-        elif method == "fs/write_text_file":
-            return self._handle_write_file(params)
-        elif method == "terminal/create":
-            return self._handle_terminal_create(params)
-        elif method == "terminal/output":
-            return self._handle_terminal_output(params)
-        elif method == "terminal/wait_for_exit":
-            return self._handle_terminal_wait(params)
-        elif method == "terminal/release":
-            return self._handle_terminal_release(params)
-        elif method == "terminal/kill":
-            return self._handle_terminal_kill(params)
-        else:
-            logger.warning("Unhandled agent request: %s", method)
+        handler = {
+            "session/request_permission": self._handle_permission_request,
+            "fs/read_text_file": self._handle_read_file,
+            "fs/write_text_file": self._handle_write_file,
+            "terminal/create": self._handle_terminal_create,
+            "terminal/output": self._handle_terminal_output,
+            "terminal/wait_for_exit": self._handle_terminal_wait,
+            "terminal/release": self._handle_terminal_release,
+            "terminal/kill": self._handle_terminal_kill,
+        }.get(method)
+
+        if handler is None:
+            logger.warning("Unhandled agent request: %s params=%s", method, params)
             return None
+
+        try:
+            result = handler(params)
+            logger.info("Agent request %s → response=%s", method, _summarize(result))
+            return result
+        except Exception as e:
+            logger.error("Agent request %s → ERROR: %s", method, e, exc_info=True)
+            raise
 
     def _handle_permission_request(self, params: dict[str, Any]) -> dict[str, Any]:
         """Auto-approve all permission requests."""

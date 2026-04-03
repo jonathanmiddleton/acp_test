@@ -71,21 +71,72 @@ class ChatCompletionResponse(BaseModel):
 # --- Server ---
 
 
-def create_app(acp_client: AcpClient, cwd: str) -> FastAPI:
-    """Create the FastAPI app wired to the given ACP client."""
+def create_app(
+    acp_client: AcpClient,
+    cwd: str,
+    system_prompt: str | None = None,
+) -> FastAPI:
+    """Create the FastAPI app wired to the given ACP client.
+
+    Args:
+        acp_client: The ACP client instance.
+        cwd: Working directory for ACP sessions.
+        system_prompt: Optional system prompt injected as the first turn
+            in each new ACP session. If None, no system prompt is injected.
+    """
 
     app = FastAPI(title="ACP-to-OpenAI Proxy")
 
-    # Track session per model to reuse sessions where possible.
-    # Key: model_id, Value: session_id
-    _model_sessions: dict[str, str] = {}
+    # Session management: keyed by (model_id, conversation_hash).
+    # conversation_hash is derived from the first user message in the
+    # OpenAI messages array — this is stable across turns because
+    # OpenCode replays the full history each time.
+    _sessions: dict[tuple[str, str], str] = {}
+    # Track which sessions have had their system prompt injected.
+    _initialized_sessions: set[str] = set()
 
-    async def _get_session(model_id: str) -> str:
-        """Get or create a session for the given model."""
-        if model_id not in _model_sessions:
+    async def _get_session(model_id: str, messages: list[dict[str, Any]]) -> str:
+        """Get or create an ACP session for this conversation.
+
+        Sessions are identified by (model, hash_of_first_user_message).
+        A new conversation in OpenCode produces a different first user
+        message and therefore a different session. The title generator
+        also produces a different first message ("You are a title
+        generator...") and gets its own session — no collision.
+        """
+        import hashlib
+
+        first_msg = AcpClient.extract_first_user_message(messages)
+        conv_hash = hashlib.sha256(first_msg.encode()).hexdigest()[:16]
+        key = (model_id, conv_hash)
+
+        if key not in _sessions:
             session_id = await acp_client.create_session(cwd, model_id=model_id)
-            _model_sessions[model_id] = session_id
-        return _model_sessions[model_id]
+            _sessions[key] = session_id
+            logger.info(
+                "New session %s for model=%s conv=%s (first_msg=%s...)",
+                session_id[:8],
+                model_id,
+                conv_hash[:8],
+                first_msg[:60].replace("\n", " "),
+            )
+
+            # Inject system prompt as the first turn if configured
+            if system_prompt and session_id not in _initialized_sessions:
+                _initialized_sessions.add(session_id)
+                logger.info(
+                    "Injecting system prompt into session %s (%d chars)",
+                    session_id[:8],
+                    len(system_prompt),
+                )
+                # Send and drain — we don't return this response to the caller
+                async for _ in acp_client.prompt(
+                    session_id,
+                    [{"role": "system", "content": system_prompt}],
+                ):
+                    pass
+
+        return _sessions[key]
 
     @app.get("/v1/models")
     async def list_models() -> JSONResponse:
@@ -122,6 +173,28 @@ def create_app(acp_client: AcpClient, cwd: str) -> FastAPI:
                 logger.debug("Full tool definitions: %s", json.dumps(tools, indent=2))
             else:
                 logger.info("No tools in request")
+
+            # Log ALL extra fields OpenCode sends (session IDs, metadata, etc.)
+            known_fields = {
+                "model",
+                "messages",
+                "stream",
+                "temperature",
+                "max_tokens",
+                "stream_options",
+                "top_p",
+                "frequency_penalty",
+                "presence_penalty",
+                "stop",
+                "n",
+                "tools",
+                "tool_choice",
+            }
+            extra = {k: v for k, v in raw.items() if k not in known_fields}
+            if extra:
+                logger.info(
+                    "Extra fields in request: %s", json.dumps(extra, default=str)[:500]
+                )
         except Exception:
             logger.debug("Could not parse raw request body for tool inspection")
 
@@ -149,7 +222,7 @@ def create_app(acp_client: AcpClient, cwd: str) -> FastAPI:
                 },
             )
 
-        session_id = await _get_session(model_id)
+        session_id = await _get_session(model_id, messages)
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 

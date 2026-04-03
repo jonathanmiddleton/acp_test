@@ -8,7 +8,8 @@ Usage:
                       Auto-discovered if omitted (IntelliJ 2025.3 plugin only).
     --port PORT       Port to listen on (default: 8765)
     --cwd PATH        Working directory for ACP sessions (default: current dir)
-    --log-level LEVEL Logging level (default: INFO)
+    --log-level LEVEL Console logging level (default: INFO)
+    --log-file PATH   Log file path (default: logs/proxy.log)
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import logging.handlers
 import os
 import signal
 import sys
@@ -28,8 +30,48 @@ from .server import create_app
 
 logger = logging.getLogger(__name__)
 
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+LOG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB per file
+LOG_BACKUP_COUNT = 3
 
-async def run(binary: str, port: int, cwd: str) -> None:
+
+def _configure_logging(console_level: str, log_file: str) -> None:
+    """Set up dual logging: DEBUG to file (always), configurable to console."""
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    # Console handler — respects --log-level
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(getattr(logging, console_level))
+    console.setFormatter(logging.Formatter(LOG_FORMAT))
+    root.addHandler(console)
+
+    # File handler — always DEBUG, with rotation
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file,
+        maxBytes=LOG_MAX_BYTES,
+        backupCount=LOG_BACKUP_COUNT,
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    root.addHandler(file_handler)
+
+    # Route uvicorn access and error logs through the same handlers
+    for uv_logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        uv_logger = logging.getLogger(uv_logger_name)
+        uv_logger.handlers.clear()
+        uv_logger.propagate = True
+
+
+async def run(
+    binary: str,
+    port: int,
+    cwd: str,
+    system_prompt: str | None = None,
+) -> None:
     """Start the ACP client and HTTP server."""
     client = AcpClient(binary)
     await client.start()
@@ -40,13 +82,13 @@ async def run(binary: str, port: int, cwd: str) -> None:
     logger.info("Available models: %s", [m.model_id for m in client.models])
     logger.info("Default model: %s", client.default_model)
 
-    app = create_app(client, cwd)
+    app = create_app(client, cwd, system_prompt=system_prompt)
 
     config = uvicorn.Config(
         app,
         host="127.0.0.1",
         port=port,
-        log_level="info",
+        log_level="warning",  # Suppress uvicorn's own logging; we route via root
     )
     server = uvicorn.Server(config)
 
@@ -105,14 +147,20 @@ def main() -> None:
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)",
+        help="Console logging level (default: INFO). File always logs DEBUG.",
+    )
+    parser.add_argument(
+        "--log-file",
+        default="logs/proxy.log",
+        help="Log file path (default: logs/proxy.log). DEBUG level always.",
+    )
+    parser.add_argument(
+        "--system-prompt",
+        help="Path to a file containing a system prompt to inject into each new session.",
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    _configure_logging(args.log_level, args.log_file)
 
     binary = args.binary
     if not binary:
@@ -126,9 +174,19 @@ def main() -> None:
         )
         sys.exit(1)
 
+    system_prompt = None
+    if args.system_prompt:
+        with open(args.system_prompt) as f:
+            system_prompt = f.read().strip()
+        logger.info(
+            "Loaded system prompt from %s (%d chars)",
+            args.system_prompt,
+            len(system_prompt),
+        )
+
     logger.info("Using binary: %s", binary)
 
-    asyncio.run(run(binary, args.port, args.cwd))
+    asyncio.run(run(binary, args.port, args.cwd, system_prompt=system_prompt))
 
 
 if __name__ == "__main__":

@@ -217,34 +217,57 @@ async def test_extra_fields_accepted(client, fake_client):
 
 
 @pytest.mark.asyncio
-async def test_session_reuse_per_model(client, fake_client):
-    """Multiple requests for the same model reuse the same session."""
+async def test_session_reuse_per_conversation(client, fake_client):
+    """Sessions are identified by (model, hash_of_first_user_message).
+
+    Same model + same first user message = same session (multi-turn).
+    Same model + different first user message = different session.
+    Different model + same first user message = different session.
+    """
+    # Turn 1 of conversation A
     await client.post(
         "/v1/chat/completions",
         json={
             "model": "gpt-4.1",
-            "messages": [{"role": "user", "content": "a"}],
+            "messages": [{"role": "user", "content": "hello"}],
             "stream": False,
         },
     )
-    await client.post(
-        "/v1/chat/completions",
-        json={
-            "model": "gpt-4.1",
-            "messages": [{"role": "user", "content": "b"}],
-            "stream": False,
-        },
-    )
-    # Should have created only one session for gpt-4.1
     assert fake_client._session_counter == 1
 
-    # Different model creates a new session
+    # Turn 2 of conversation A — same first user message, reuses session
     await client.post(
         "/v1/chat/completions",
         json={
-            "model": "gpt-4o",
-            "messages": [{"role": "user", "content": "c"}],
+            "model": "gpt-4.1",
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi there"},
+                {"role": "user", "content": "follow up"},
+            ],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 1
+
+    # Conversation B — different first user message, new session
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "different topic"}],
             "stream": False,
         },
     )
     assert fake_client._session_counter == 2
+
+    # Conversation C — same first msg as A but different model, new session
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 3
