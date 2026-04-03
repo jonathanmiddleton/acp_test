@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "enabled_providers": ["copilot"],
   "provider": {
     "copilot": {
       "npm": "@ai-sdk/openai-compatible",
