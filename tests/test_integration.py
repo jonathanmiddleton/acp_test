@@ -155,3 +155,48 @@ async def test_full_proxy_http_roundtrip():
             assert "HTTP_OK" in data["choices"][0]["message"]["content"]
     finally:
         await client.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(BINARY is None, reason=SKIP_REASON)
+async def test_model_switching():
+    """Verify that session/set_model actually changes the active model."""
+    client = AcpClient(BINARY)
+    try:
+        await client.start()
+        session_id = await client.create_session(os.getcwd())
+
+        # Pick a model different from the default
+        default = client.default_model
+        available = [m.model_id for m in client.models]
+        other = next((m for m in available if m != default), None)
+        if other is None:
+            pytest.skip("Only one model available, cannot test switching")
+
+        # Switch model
+        await client.set_model(session_id, other)
+
+        # Verify by asking the model to identify itself
+        text = ""
+        async for update in client.prompt(
+            session_id,
+            [
+                {
+                    "role": "user",
+                    "content": "What model are you? Reply with just your model name, nothing else.",
+                }
+            ],
+        ):
+            if update.get("sessionUpdate") == "agent_message_chunk":
+                content = update.get("content", {})
+                if content.get("type") == "text":
+                    text += content.get("text", "")
+
+        # The response should reference the new model, not the default
+        # (Loose check — model self-identification varies)
+        assert text.strip(), "Model returned empty response"
+        assert default not in text or other in text, (
+            f"Expected model {other} but got response mentioning {default}: {text}"
+        )
+    finally:
+        await client.stop()

@@ -215,34 +215,42 @@ class AcpClient:
         self._default_model = models_data.get("currentModelId")
 
     async def _try_set_model(self, session_id: str, model_id: str) -> None:
-        """Attempt to set the model for a session.
+        """Set the model for a session.
 
-        Tries session/set_config_option first. If the server doesn't
-        support it (Method not found), logs a warning and continues
-        with the default model.
+        Tries session/set_model (Copilot-specific) first, then falls back
+        to session/set_config_option (ACP spec standard). If neither works,
+        logs a warning and continues with the default model.
         """
-        try:
-            await self._transport.send_request(
+        methods = [
+            ("session/set_model", {"sessionId": session_id, "modelId": model_id}),
+            (
                 "session/set_config_option",
-                {
-                    "sessionId": session_id,
-                    "configId": "model",
-                    "value": model_id,
-                },
-            )
-            if session_id in self._sessions:
-                self._sessions[session_id].model_id = model_id
-            logger.info("Set model for session %s to %s", session_id, model_id)
-        except AcpError as e:
-            if "not found" in str(e).lower():
-                logger.warning(
-                    "session/set_config_option not supported by this server; "
-                    "using default model. Requested: %s",
+                {"sessionId": session_id, "configId": "model", "value": model_id},
+            ),
+        ]
+        for method, params in methods:
+            try:
+                await self._transport.send_request(method, params)
+                if session_id in self._sessions:
+                    self._sessions[session_id].model_id = model_id
+                logger.info(
+                    "Set model for session %s to %s (via %s)",
+                    session_id,
                     model_id,
+                    method,
                 )
-                # Leave session.model_id as the default
-            else:
+                return
+            except AcpError as e:
+                if "not found" in str(e).lower():
+                    logger.debug("%s not supported, trying next method", method)
+                    continue
                 raise
+
+        logger.warning(
+            "No supported method for model selection; using default model. "
+            "Requested: %s",
+            model_id,
+        )
 
     def _messages_to_prompt(
         self, messages: list[dict[str, Any]]
