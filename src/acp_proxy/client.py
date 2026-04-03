@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
-from .transport import AcpTransport
+from .transport import AcpError, AcpTransport
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class AcpClient:
 
         # Set model if specified and different from default
         if model_id and model_id != self._default_model:
-            await self._set_model(session_id, model_id)
+            await self._try_set_model(session_id, model_id)
 
         logger.info("Created session %s with model %s", session_id, session.model_id)
         return session_id
@@ -176,7 +176,7 @@ class AcpClient:
 
     async def set_model(self, session_id: str, model_id: str) -> None:
         """Change the model for an existing session."""
-        await self._set_model(session_id, model_id)
+        await self._try_set_model(session_id, model_id)
 
     async def _initialize(self) -> None:
         """Complete the ACP initialization handshake."""
@@ -214,19 +214,35 @@ class AcpClient:
             )
         self._default_model = models_data.get("currentModelId")
 
-    async def _set_model(self, session_id: str, model_id: str) -> None:
-        """Set the model for a session via config option."""
-        await self._transport.send_request(
-            "session/set_config_option",
-            {
-                "sessionId": session_id,
-                "configId": "model",
-                "value": model_id,
-            },
-        )
-        if session_id in self._sessions:
-            self._sessions[session_id].model_id = model_id
-        logger.info("Set model for session %s to %s", session_id, model_id)
+    async def _try_set_model(self, session_id: str, model_id: str) -> None:
+        """Attempt to set the model for a session.
+
+        Tries session/set_config_option first. If the server doesn't
+        support it (Method not found), logs a warning and continues
+        with the default model.
+        """
+        try:
+            await self._transport.send_request(
+                "session/set_config_option",
+                {
+                    "sessionId": session_id,
+                    "configId": "model",
+                    "value": model_id,
+                },
+            )
+            if session_id in self._sessions:
+                self._sessions[session_id].model_id = model_id
+            logger.info("Set model for session %s to %s", session_id, model_id)
+        except AcpError as e:
+            if "not found" in str(e).lower():
+                logger.warning(
+                    "session/set_config_option not supported by this server; "
+                    "using default model. Requested: %s",
+                    model_id,
+                )
+                # Leave session.model_id as the default
+            else:
+                raise
 
     def _messages_to_prompt(
         self, messages: list[dict[str, Any]]

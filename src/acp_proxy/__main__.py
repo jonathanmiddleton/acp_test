@@ -45,31 +45,44 @@ def find_binary() -> str | None:
 
 
 def find_binary_from_jetbrains() -> str | None:
-    """Try to find the binary from the JetBrains plugin directory."""
+    """Try to find the binary from JetBrains plugin directories.
+
+    Prefers IntelliJ IDEA over other IDEs (PyCharm, etc.) since the
+    Copilot plugin version is typically more current there. Within
+    each IDE, picks the newest version directory.
+    """
     import glob
+    import platform
 
     home = os.path.expanduser("~")
-    patterns = [
-        os.path.join(
-            home,
-            "Library/Application Support/JetBrains/*/plugins/"
-            "github-copilot-intellij/copilot-agent/native/darwin-arm64/"
-            "copilot-language-server",
-        ),
-        # Linux path pattern
-        os.path.join(
-            home,
-            ".local/share/JetBrains/*/plugins/"
-            "github-copilot-intellij/copilot-agent/native/linux-x64/"
-            "copilot-language-server",
-        ),
+
+    if platform.system() == "Darwin":
+        arch = "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64"
+        base = os.path.join(home, "Library/Application Support/JetBrains")
+    else:
+        arch = "linux-x64"
+        base = os.path.join(home, ".local/share/JetBrains")
+
+    suffix = (
+        f"plugins/github-copilot-intellij/copilot-agent/native/{arch}/"
+        "copilot-language-server"
+    )
+
+    # Search order: IntelliJ IDEA first, then any other JetBrains IDE
+    ide_patterns = [
+        "IntelliJIdea*",  # IntelliJ IDEA (preferred)
+        "*",  # fallback: any JetBrains IDE
     ]
-    for pattern in patterns:
+
+    for ide_pattern in ide_patterns:
+        pattern = os.path.join(base, ide_pattern, suffix)
         matches = glob.glob(pattern)
         if matches:
-            # Return the most recently modified one
-            matches.sort(key=os.path.getmtime, reverse=True)
+            # Sort by version directory name descending (e.g., 2025.3 > 2024.2)
+            matches.sort(reverse=True)
+            logger.info("Found binary candidates: %s", matches)
             return matches[0]
+
     return None
 
 
