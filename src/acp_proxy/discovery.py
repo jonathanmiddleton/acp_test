@@ -6,6 +6,11 @@ for IntelliJ IDEA 2025.3. Other versions (older IntelliJ, other JetBrains
 IDEs, standalone installs, Homebrew, npm) are known to be incompatible with
 the ACP protocol surface this proxy requires.
 
+Supported platforms:
+- macOS (Darwin): binary at ~/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/...
+- Windows: binary at %APPDATA%/JetBrains/IntelliJIdea2025.3/plugins/... (roaming profile)
+  NOTE: Windows path is provisional — needs verification on the target environment.
+
 This module is the single source of truth for binary resolution. Both the
 CLI entry point and the test suite import from here.
 """
@@ -21,68 +26,81 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-# The only compatible binary path pattern.
-# The wildcard covers the user-specific directory segment (e.g., a SOEID
-# or version-specific plugin cache directory).
-_INTELLIJ_2025_3_PATTERN_SUFFIX = (
-    "plugins/github-copilot-intellij/copilot-agent/native/{arch}/"
-    "copilot-language-server"
+_PLUGIN_SUFFIX = (
+    "plugins/github-copilot-intellij/copilot-agent/native/{arch}/{binary_name}"
 )
 
 
-def _compatible_pattern() -> str:
-    """Return the glob pattern for the compatible binary on this platform."""
+def _platform_config() -> dict[str, str]:
+    """Return platform-specific discovery configuration.
+
+    Returns a dict with keys: base, arch, binary_name, ide_dir.
+    """
+    system = platform.system()
     home = os.path.expanduser("~")
 
-    if platform.system() == "Darwin":
-        arch = "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64"
-        base = os.path.join(home, "Library/Application Support/JetBrains")
+    if system == "Darwin":
+        return {
+            "base": os.path.join(home, "Library/Application Support/JetBrains"),
+            "arch": "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64",
+            "binary_name": "copilot-language-server",
+            "ide_dir": "IntelliJIdea2025.3",
+        }
+    elif system == "Windows":
+        # Windows uses %APPDATA% (roaming profile) for JetBrains config.
+        # NOTE: This path is provisional and needs verification on the
+        # actual target environment. The binary is an .exe on Windows.
+        appdata = os.environ.get("APPDATA", os.path.join(home, "AppData/Roaming"))
+        return {
+            "base": os.path.join(appdata, "JetBrains"),
+            "arch": "win32-x64",
+            "binary_name": "copilot-language-server.exe",
+            "ide_dir": "IntelliJIdea2025.3",
+        }
     else:
-        arch = "linux-x64"
-        base = os.path.join(home, ".local/share/JetBrains")
+        # Linux — included for completeness but not a current target
+        return {
+            "base": os.path.join(home, ".local/share/JetBrains"),
+            "arch": "linux-x64",
+            "binary_name": "copilot-language-server",
+            "ide_dir": "IntelliJIdea2025.3",
+        }
 
-    suffix = _INTELLIJ_2025_3_PATTERN_SUFFIX.format(arch=arch)
-    return os.path.join(base, "IntellijIdea2025.3", "*", suffix)
+
+def _compatible_path_pattern() -> str:
+    """Return the expected full path for the compatible binary on this platform."""
+    cfg = _platform_config()
+    suffix = _PLUGIN_SUFFIX.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
+    return os.path.join(cfg["base"], cfg["ide_dir"], suffix)
+
+
+def _compatible_regex() -> re.Pattern[str]:
+    """Compile a regex that matches the compatible binary path.
+
+    The path is fully fixed (no wildcards) — there is exactly one valid
+    location per platform.
+    """
+    pattern = _compatible_path_pattern()
+    return re.compile(re.escape(pattern))
 
 
 def _is_compatible_path(binary_path: str) -> bool:
-    """Check whether a binary path matches the compatible IntelliJ 2025.3 pattern.
-
-    Uses a regex derived from the glob pattern so that both filesystem-discovered
-    and ps-discovered paths are validated against the same constraint.
-    """
-    home = os.path.expanduser("~")
-
-    if platform.system() == "Darwin":
-        arch = "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64"
-        base = os.path.join(home, "Library/Application Support/JetBrains")
-    else:
-        arch = "linux-x64"
-        base = os.path.join(home, ".local/share/JetBrains")
-
-    suffix = _INTELLIJ_2025_3_PATTERN_SUFFIX.format(arch=arch)
-    # Build a regex: escape the fixed parts, replace the wildcard segment
-    pattern_path = os.path.join(base, "IntellijIdea2025.3", "*", suffix)
-    # Escape everything except the glob wildcard
-    regex = re.escape(pattern_path).replace(r"\*", "[^/]+")
-    return re.fullmatch(regex, binary_path) is not None
+    """Check whether a binary path matches the compatible IntelliJ 2025.3 pattern."""
+    return _compatible_regex().fullmatch(binary_path) is not None
 
 
 def find_binary_from_jetbrains() -> str | None:
     """Find the compatible binary from the JetBrains plugin directory.
 
-    Returns the path to the newest compatible binary, or None.
+    Returns the path if it exists and is executable, or None.
     """
-    pattern = _compatible_pattern()
-    matches = glob.glob(pattern)
-    if not matches:
-        logger.debug("No binaries found matching pattern: %s", pattern)
-        return None
+    expected = _compatible_path_pattern()
+    if os.path.isfile(expected) and os.access(expected, os.X_OK):
+        logger.info("Found compatible binary on disk: %s", expected)
+        return expected
 
-    # Sort by modification time descending — newest first
-    matches.sort(key=os.path.getmtime, reverse=True)
-    logger.info("Found compatible binary candidates: %s", matches)
-    return matches[0]
+    logger.debug("Binary not found at expected path: %s", expected)
+    return None
 
 
 def find_binary_from_processes() -> str | None:
@@ -90,9 +108,16 @@ def find_binary_from_processes() -> str | None:
 
     Scans ``ps`` output for copilot-language-server processes, but only
     accepts those whose resolved path matches the IntelliJ 2025.3 plugin
-    pattern. Incompatible binaries (other JetBrains versions, standalone
+    location. Incompatible binaries (other JetBrains versions, standalone
     installs, npm global, etc.) are explicitly rejected.
+
+    Only available on Unix-like systems (macOS, Linux). On Windows, returns
+    None — process-based discovery is not yet implemented there.
     """
+    if platform.system() == "Windows":
+        logger.debug("Process-based discovery not implemented on Windows")
+        return None
+
     try:
         out = subprocess.check_output(
             ["ps", "-eo", "command"], text=True, stderr=subprocess.DEVNULL
