@@ -153,8 +153,8 @@ async def test_chat_completion_streaming(client, fake_client):
 
 
 @pytest.mark.asyncio
-async def test_chat_completion_unknown_model_falls_back(client, fake_client):
-    """An unknown model ID falls back to the default model."""
+async def test_chat_completion_unknown_model_returns_error(client, fake_client):
+    """An unknown model ID returns a 404 error, not a silent fallback."""
     resp = await client.post(
         "/v1/chat/completions",
         json={
@@ -163,10 +163,10 @@ async def test_chat_completion_unknown_model_falls_back(client, fake_client):
             "stream": False,
         },
     )
-    assert resp.status_code == 200
-    # Should succeed with the default model
+    assert resp.status_code == 404
     data = resp.json()
-    assert data["model"] == "gpt-4.1"
+    assert data["error"]["code"] == "model_not_found"
+    assert "nonexistent-model" in data["error"]["message"]
 
 
 @pytest.mark.asyncio

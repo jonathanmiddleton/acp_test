@@ -109,15 +109,26 @@ def create_app(acp_client: AcpClient, cwd: str) -> FastAPI:
         model_id = request.model
         messages = [m.model_dump() for m in request.messages]
 
-        # Resolve model — use default if not found
         available_ids = {m.model_id for m in acp_client.models}
-        if model_id not in available_ids and acp_client.default_model:
-            logger.warning(
-                "Model %s not available, using default %s",
+        if model_id not in available_ids:
+            logger.debug(
+                "Model %s not in available set %s",
                 model_id,
-                acp_client.default_model,
+                available_ids,
             )
-            model_id = acp_client.default_model
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": {
+                        "message": (
+                            f"Model '{model_id}' is not available. "
+                            f"Available models: {sorted(available_ids)}"
+                        ),
+                        "type": "invalid_request_error",
+                        "code": "model_not_found",
+                    }
+                },
+            )
 
         session_id = await _get_session(model_id)
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"

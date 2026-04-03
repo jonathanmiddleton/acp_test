@@ -218,8 +218,9 @@ class AcpClient:
         """Set the model for a session.
 
         Tries session/set_model (Copilot-specific) first, then falls back
-        to session/set_config_option (ACP spec standard). If neither works,
-        logs a warning and continues with the default model.
+        to session/set_config_option (ACP spec standard). Raises if neither
+        method is supported — model selection is a required capability and
+        silent degradation to the default model is not acceptable.
         """
         methods = [
             ("session/set_model", {"sessionId": session_id, "modelId": model_id}),
@@ -246,10 +247,9 @@ class AcpClient:
                     continue
                 raise
 
-        logger.warning(
-            "No supported method for model selection; using default model. "
-            "Requested: %s",
-            model_id,
+        raise RuntimeError(
+            f"Model selection not supported by this server. "
+            f"Tried: {[m for m, _ in methods]}. Requested model: {model_id}"
         )
 
     def _messages_to_prompt(
