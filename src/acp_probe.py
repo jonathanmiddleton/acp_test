@@ -10,16 +10,14 @@ Usage:
 """
 
 import json
+import os
 import subprocess
 import sys
 import threading
 import time
 
-CLS_PATH = (
-    "/Users/jonathanmiddleton/Library/Application Support/JetBrains/"
-    "IntelliJIdea2025.3/plugins/github-copilot-intellij/copilot-agent/"
-    "native/darwin-arm64/copilot-language-server"
-)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+from acp_proxy.discovery import find_binary
 
 
 def read_ndjson(stream, label="stdout"):
@@ -44,12 +42,18 @@ def send(proc, msg):
 
 
 def main():
+    cls_path = find_binary()
+    if not cls_path:
+        print("ERROR: No compatible copilot-language-server binary found.")
+        print("Only the IntelliJ IDEA 2025.3 Copilot plugin binary is supported.")
+        sys.exit(1)
+
     print(f"Starting copilot-language-server in ACP mode...")
-    print(f"Binary: {CLS_PATH}")
+    print(f"Binary: {cls_path}")
     print()
 
     proc = subprocess.Popen(
-        [CLS_PATH, "--acp", "--stdio"],
+        [cls_path, "--acp", "--stdio"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -102,7 +106,7 @@ def main():
             "id": 2,
             "method": "session/new",
             "params": {
-                "cwd": "/Users/jonathanmiddleton/projects/meadow_graph",
+                "cwd": os.getcwd(),
                 "mcpServers": [],
             },
         },
