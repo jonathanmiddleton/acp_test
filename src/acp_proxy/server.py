@@ -104,8 +104,27 @@ def create_app(acp_client: AcpClient, cwd: str) -> FastAPI:
         return JSONResponse({"object": "list", "data": data})
 
     @app.post("/v1/chat/completions")
-    async def chat_completions(request: ChatCompletionRequest) -> Any:
+    async def chat_completions(
+        request: ChatCompletionRequest, raw_request: Request
+    ) -> Any:
         """Handle chat completion requests."""
+        # Log tool definitions sent by OpenCode so we can see exactly
+        # what the client thinks is available.
+        raw_body = await raw_request.body()
+        try:
+            raw = json.loads(raw_body)
+            tools = raw.get("tools")
+            if tools is not None:
+                tool_names = [
+                    t.get("function", {}).get("name", "<unnamed>") for t in tools
+                ]
+                logger.info("Tools in request (%d): %s", len(tool_names), tool_names)
+                logger.debug("Full tool definitions: %s", json.dumps(tools, indent=2))
+            else:
+                logger.info("No tools in request")
+        except Exception:
+            logger.debug("Could not parse raw request body for tool inspection")
+
         model_id = request.model
         messages = [m.model_dump() for m in request.messages]
 

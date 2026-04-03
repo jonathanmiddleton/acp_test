@@ -19,7 +19,7 @@ git clone https://github.com/jonathanmiddleton/acp_test.git
 cd acp_test
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Run
@@ -59,9 +59,9 @@ Integration tests require the `copilot-language-server` binary to be available a
 
 ## Options
 
-| Flag | Default | Description |
-|---|---|---|
-| `--binary` | auto-discovered | Path to `copilot-language-server` |
-| `--port` | 8765 | Port for the HTTP server |
-| `--cwd` | current directory | Working directory for ACP sessions |
-| `--log-level` | INFO | DEBUG, INFO, WARNING, ERROR |
+| Flag          | Default           | Description                        |
+|---------------|-------------------|------------------------------------|
+| `--binary`    | auto-discovered   | Path to `copilot-language-server`  |
+| `--port`      | 8765              | Port for the HTTP server           |
+| `--cwd`       | current directory | Working directory for ACP sessions |
+| `--log-level` | INFO              | DEBUG, INFO, WARNING, ERROR        |
