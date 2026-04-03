@@ -2,6 +2,15 @@
 
 ## High Priority
 
+- [ ] **Analyze OpenCode REST API ↔ ACP protocol alignment** — Meadow talks to OpenCode via its own REST API (`POST /session`, `POST /session/{id}/message` with agent, model, system prompt, structured output schema). This is NOT OpenAI-compatible. Evaluate whether the proxy should expose the OpenCode API on its inbound side and translate to ACP, which would let Meadow connect directly to the proxy as a drop-in OpenCode replacement in the constrained environment. Key mappings to analyze:
+  - OpenCode `POST /session` → ACP `session/new` (both create sessions)
+  - OpenCode `model.providerID/modelID` → ACP `session/set_model` (both select models)
+  - OpenCode `system` field → ACP first-turn injection (system prompt)
+  - OpenCode `format.schema` → structured output (does ACP support this?)
+  - OpenCode `agent` field → no ACP equivalent (the ACP server IS the agent)
+  - OpenCode streaming events → ACP `session/update` notifications
+  - OpenCode `parts` → ACP `ContentBlock[]`
+
 - [ ] **End-to-end test with OpenCode** — Test the refactored proxy (last-user-message extraction, per-conversation sessions, system prompt injection) with OpenCode connected. Verify: no context duplication, no session leakage, no "Operation cancelled by user" errors, title generator isolated.
 
 - [ ] **Design system prompt for Meadow integration** — What instructions to inject per session. Must cover: agent mode (build vs plan), workspace context (how to reference AGENTS.md content), tool behavior shaping, coding standards. The system prompt is the primary control surface now that we own the first turn.
@@ -39,3 +48,8 @@
 - **System prompt injection confirmed effective** — first-turn instructions override ACP server's default tool reporting.
 - **ACP server has built-in GitHub MCP server** — provides github-mcp-server-* tools by default.
 - **`cwd` anchors the workspace** — part of the ACP spec, used by the server for file system boundary.
+- **Meadow uses OpenCode's REST API, not OpenAI-compatible** — `POST /session/{id}/message` with first-class `system`, `agent`, `model`, `format` (structured output schema), `parts`. This is richer than `/v1/chat/completions`.
+- **Current flow (OpenCode in the middle) is awkward but functional** — OpenCode's tools are stripped, system prompt is stripped, only the last user message reaches ACP. The value of OpenCode in this path is minimal (UI shell only). Keep until the OpenCode API → ACP proxy analysis is complete.
+- **Two integration paths for Meadow:**
+  1. Normal environments: Meadow → OpenCode → native provider (existing, works)
+  2. Constrained environment: Meadow → proxy → ACP server (needs OpenCode API on inbound side OR Meadow learns OpenAI-compatible)
