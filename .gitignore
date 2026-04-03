@@ -6,4 +6,4 @@ __pycache__/
 .pytest_cache/
 docs/journal.md
 logs/
-node_modules/
+.DS_Store
