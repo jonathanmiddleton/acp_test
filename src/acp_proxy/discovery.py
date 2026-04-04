@@ -26,8 +26,13 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-_PLUGIN_SUFFIX = (
-    "plugins/github-copilot-intellij/copilot-agent/native/{arch}/{binary_name}"
+_PLUGIN_SUFFIX_PARTS = (
+    "plugins",
+    "github-copilot-intellij",
+    "copilot-agent",
+    "native",
+    "{arch}",
+    "{binary_name}",
 )
 
 
@@ -70,8 +75,11 @@ def _platform_config() -> dict[str, str]:
 def _compatible_path_pattern() -> str:
     """Return the expected full path for the compatible binary on this platform."""
     cfg = _platform_config()
-    suffix = _PLUGIN_SUFFIX.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
-    return os.path.join(cfg["base"], cfg["ide_dir"], suffix)
+    suffix_parts = [
+        p.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
+        for p in _PLUGIN_SUFFIX_PARTS
+    ]
+    return os.path.join(cfg["base"], cfg["ide_dir"], *suffix_parts)
 
 
 def _compatible_regex() -> re.Pattern[str]:

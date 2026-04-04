@@ -105,8 +105,14 @@ async def run(
         logger.info("Shutdown signal received")
         shutdown_event.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, _signal_handler)
+    if sys.platform == "win32":
+        # asyncio.loop.add_signal_handler is not supported on Windows.
+        # Use signal.signal for SIGINT (Ctrl+C); SIGTERM does not exist
+        # on Windows.
+        signal.signal(signal.SIGINT, lambda *_: _signal_handler())
+    else:
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _signal_handler)
 
     # Run server in background task
     server_task = asyncio.create_task(server.serve())
