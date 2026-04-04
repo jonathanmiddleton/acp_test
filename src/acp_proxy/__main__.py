@@ -2,7 +2,11 @@
 Entry point for the ACP-to-OpenAI proxy.
 
 Usage:
-    python -m acp_proxy [OPTIONS]
+    acp-proxy [OPTIONS]
+
+    Start the proxy from your project directory. The current working directory
+    becomes the ACP workspace — the copilot-language-server scans it and scopes
+    file operations to it.
 
     --binary PATH     Path to copilot-language-server binary.
                       Auto-discovered if omitted (IntelliJ 2025.3 plugin only).
@@ -10,6 +14,7 @@ Usage:
     --cwd PATH        Working directory for ACP sessions (default: current dir)
     --log-level LEVEL Console logging level (default: INFO)
     --log-file PATH   Log file path (default: logs/proxy.log)
+    --system-prompt   Path to system prompt file injected into each new session.
 """
 
 from __future__ import annotations
