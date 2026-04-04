@@ -217,6 +217,124 @@ async def test_extra_fields_accepted(client, fake_client):
 
 
 @pytest.mark.asyncio
+async def test_system_prompt_injected_on_first_session(fake_client):
+    """ADR-003: system prompt is sent as the first turn in a new session.
+
+    The system prompt must be injected and drained before any user content
+    reaches the session. Verify that the FakeAcpClient receives the system
+    prompt as a separate call before the user's actual message.
+    """
+    prompt_calls: list[tuple[str, list[dict]]] = []
+    original_prompt = fake_client.prompt
+
+    async def tracking_prompt(session_id, messages):
+        prompt_calls.append((session_id, messages))
+        async for update in original_prompt(session_id, messages):
+            yield update
+
+    fake_client.prompt = tracking_prompt
+
+    app = create_app(fake_client, "/tmp/test", system_prompt="You are a test agent.")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as http:
+        await http.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": False,
+            },
+        )
+
+    # Should have two prompt calls: system prompt injection, then user message
+    assert len(prompt_calls) == 2
+    # First call is the system prompt
+    sys_msgs = prompt_calls[0][1]
+    assert len(sys_msgs) == 1
+    assert sys_msgs[0]["role"] == "system"
+    assert sys_msgs[0]["content"] == "You are a test agent."
+    # Second call is the user message
+    user_msgs = prompt_calls[1][1]
+    assert any(m["role"] == "user" for m in user_msgs)
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_not_injected_on_reused_session(fake_client):
+    """ADR-003: system prompt is injected only once per session, not per turn."""
+    prompt_calls: list[tuple[str, list[dict]]] = []
+    original_prompt = fake_client.prompt
+
+    async def tracking_prompt(session_id, messages):
+        prompt_calls.append((session_id, messages))
+        async for update in original_prompt(session_id, messages):
+            yield update
+
+    fake_client.prompt = tracking_prompt
+
+    app = create_app(fake_client, "/tmp/test", system_prompt="System instructions.")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as http:
+        # Turn 1
+        await http.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": False,
+            },
+        )
+        # Turn 2 — same conversation (same first user message)
+        await http.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [
+                    {"role": "user", "content": "hello"},
+                    {"role": "assistant", "content": "hi"},
+                    {"role": "user", "content": "follow up"},
+                ],
+                "stream": False,
+            },
+        )
+
+    # Turn 1: system prompt + user message = 2 calls
+    # Turn 2: user message only = 1 call (no system prompt re-injection)
+    assert len(prompt_calls) == 3
+    system_calls = [c for c in prompt_calls if c[1][0].get("role") == "system"]
+    assert len(system_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_no_system_prompt_when_not_configured(fake_client):
+    """When no system prompt is provided, no injection occurs."""
+    prompt_calls: list[tuple[str, list[dict]]] = []
+    original_prompt = fake_client.prompt
+
+    async def tracking_prompt(session_id, messages):
+        prompt_calls.append((session_id, messages))
+        async for update in original_prompt(session_id, messages):
+            yield update
+
+    fake_client.prompt = tracking_prompt
+
+    app = create_app(fake_client, "/tmp/test")  # No system_prompt
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as http:
+        await http.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": False,
+            },
+        )
+
+    # Only the user message, no system prompt
+    assert len(prompt_calls) == 1
+    assert prompt_calls[0][1][0]["role"] == "user"
+
+
+@pytest.mark.asyncio
 async def test_session_reuse_per_conversation(client, fake_client):
     """Sessions are identified by (model, hash_of_first_user_message).
 
@@ -271,3 +389,28 @@ async def test_session_reuse_per_conversation(client, fake_client):
         },
     )
     assert fake_client._session_counter == 3
+
+
+# ---------------------------------------------------------------------------
+# _map_stop_reason
+# ---------------------------------------------------------------------------
+
+
+class TestMapStopReason:
+    """All ACP stop reasons map to OpenAI finish reasons."""
+
+    @pytest.mark.parametrize(
+        "acp_reason,expected",
+        [
+            ("end_turn", "stop"),
+            ("max_tokens", "length"),
+            ("cancelled", "stop"),
+            ("refusal", "stop"),
+            ("max_turn_requests", "stop"),
+            ("unknown_future_reason", "stop"),  # unknown defaults to "stop"
+        ],
+    )
+    def test_mapping(self, acp_reason: str, expected: str):
+        from acp_proxy.server import _map_stop_reason
+
+        assert _map_stop_reason(acp_reason) == expected

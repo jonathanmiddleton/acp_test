@@ -232,3 +232,114 @@ async def test_stop_rejects_pending():
 
     with pytest.raises(ConnectionError):
         await asyncio.wait_for(task, timeout=2.0)
+
+
+@pytest.mark.asyncio
+async def test_non_json_line_skipped():
+    """Non-JSON output from the subprocess is logged and skipped, not fatal."""
+    fake = FakeProcess()
+    transport = make_transport_with_fake(fake)
+
+    # Send a non-JSON line followed by a valid response
+    task = asyncio.create_task(transport.send_request("test/method"))
+    await asyncio.sleep(0.05)
+
+    sent = json.loads(fake.stdin.written[0].decode())
+    req_id = sent["id"]
+
+    # Garbage line — should be skipped
+    fake.stdout.feed("this is not json {{{")
+    # Valid response — should still be processed
+    fake.stdout.feed(
+        json.dumps({"jsonrpc": "2.0", "id": req_id, "result": {"recovered": True}})
+    )
+
+    result = await asyncio.wait_for(task, timeout=2.0)
+    assert result == {"recovered": True}
+
+    fake.stdout.close()
+    fake.stderr.close()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_response_id_ignored():
+    """A response with an unknown ID is logged and ignored."""
+    fake = FakeProcess()
+    transport = make_transport_with_fake(fake)
+
+    # Send a response for an ID that was never requested
+    fake.stdout.feed(
+        json.dumps({"jsonrpc": "2.0", "id": 99999, "result": {"orphan": True}})
+    )
+
+    # Give the read loop time to process
+    await asyncio.sleep(0.1)
+
+    # Transport should still be functional
+    task = asyncio.create_task(transport.send_request("test/method"))
+    await asyncio.sleep(0.05)
+
+    sent = json.loads(fake.stdin.written[0].decode())
+    fake.stdout.feed(
+        json.dumps({"jsonrpc": "2.0", "id": sent["id"], "result": {"ok": True}})
+    )
+
+    result = await asyncio.wait_for(task, timeout=2.0)
+    assert result == {"ok": True}
+
+    fake.stdout.close()
+    fake.stderr.close()
+
+
+@pytest.mark.asyncio
+async def test_handler_exception_returns_error_response():
+    """If a request handler raises, an error response is sent back."""
+    fake = FakeProcess()
+    transport = make_transport_with_fake(fake)
+
+    def exploding_handler(msg):
+        raise ValueError("handler blew up")
+
+    transport.on_request(exploding_handler)
+
+    fake.stdout.feed(
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "some/request",
+                "params": {},
+            }
+        )
+    )
+
+    await asyncio.sleep(0.15)
+
+    # Should have sent an error response back
+    assert len(fake.stdin.written) >= 1
+    resp = json.loads(fake.stdin.written[-1].decode())
+    assert resp["id"] == 42
+    assert "error" in resp
+    assert resp["error"]["code"] == -32603
+    assert resp["error"]["message"] == "Internal error"
+
+    fake.stdout.close()
+    fake.stderr.close()
+
+
+@pytest.mark.asyncio
+async def test_send_notification_no_id():
+    """send_notification sends a message without an 'id' field."""
+    fake = FakeProcess()
+    transport = make_transport_with_fake(fake)
+
+    await transport.send_notification("test/notify", {"data": "value"})
+
+    assert len(fake.stdin.written) == 1
+    sent = json.loads(fake.stdin.written[0].decode())
+    assert "id" not in sent
+    assert sent["method"] == "test/notify"
+    assert sent["params"] == {"data": "value"}
+
+    fake.stdout.close()
+    fake.stderr.close()
