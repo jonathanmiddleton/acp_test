@@ -1,0 +1,23 @@
+{
+  "question": "Implement a Python function `merge_intervals(intervals: list[list[int]]) -> list[list[int]]` that merges all overlapping intervals. The input is a list of intervals where each interval is [start, end]. Return the merged intervals sorted by start time. Do not use any imports. Return only the function definition, no examples or explanation.",
+  "injections": [
+    {
+      "label": "edge_case_reflection",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I didn't handle several edge cases. I need to reconsider what happens with empty input, a single interval, intervals that touch but don't overlap like [1,2] and [2,3], intervals that are fully contained within another, unsorted input, and duplicate intervals. Let me rewrite the function to handle all of these correctly:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "minimal_nudge",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I think there are edge cases I missed. Let me reconsider and rewrite more carefully:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "specific_bug_seed",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I just realized my implementation has a bug with touching intervals like [1,2] and [2,3] \u2014 these should merge into [1,3] but my code treats them as separate. Also I'm not sure I handle empty input correctly. Let me fix this:",
+      "nudge": "You got cut off. Please continue where you left off."
+    }
+  ]
+}

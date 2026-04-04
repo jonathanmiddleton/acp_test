@@ -1,0 +1,35 @@
+{
+  "question": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation.",
+  "injections": [
+    {
+      "label": "exact_bug",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I just realized there's a critical Python scoping bug in my implementation. When using nested functions that modify a shared variable like a position index, every inner function that assigns to that variable needs its own `nonlocal` declaration, not just the outer function. Without this, Python treats the variable as local and raises UnboundLocalError. Let me rewrite with correct scoping:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "category_scoping",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I haven't properly considered variable scoping. When nested functions modify shared mutable state, Python's closure semantics can cause subtle bugs. Let me reconsider my implementation with this in mind:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "category_scoping_mutation_edges",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I haven't properly considered variable scoping, mutable state in closures, or boundary conditions like unary minus and empty input. Let me reconsider my implementation carefully:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "generic_quality",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I should verify my implementation is correct by mentally tracing through several test cases and checking for common Python pitfalls. Let me reconsider:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "no_injection",
+      "closing": "",
+      "partial_assistant": "",
+      "nudge": ""
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "question": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation.",
+  "injections": [
+    {
+      "label": "edge_case_reflection",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I didn't handle several edge cases correctly. I need to reconsider what happens with negative numbers like -3+2, leading minus signs, double parentheses like ((1+2)), division by zero, whitespace in the expression, and expressions like 2*-3. Let me rewrite the function to handle all of these:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "minimal_nudge",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I think there are parser edge cases I missed. Let me reconsider and rewrite more carefully:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "specific_bug_seed",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I just realized my implementation doesn't correctly handle unary minus (e.g. -5 or 2*-3), and expressions with only whitespace or empty parentheses would crash. Also division by zero should raise ValueError not ZeroDivisionError. Let me fix this:",
+      "nudge": "You got cut off. Please continue where you left off."
+    }
+  ]
+}

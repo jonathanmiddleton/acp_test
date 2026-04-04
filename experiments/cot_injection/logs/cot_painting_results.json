@@ -1,0 +1,57 @@
+[
+  {
+    "variant": "baseline",
+    "response": "Here\u2019s a concise comparison of the two models for proxying LLM conversations:\n\n**Stateful Session Model**\n- Pros:\n  - Lower latency: Only new user input is sent; no need to resend history.\n  - Supports long conversations without hitting context limits.\n  - Easier to manage user-specific state (e.g., preferences, authentication).\n- Cons:\n  - Requires server-side storage and session management.\n  - Harder to scale horizontally (sticky sessions or shared state needed).\n  - More complex to recover from failures.\n\n**Stateless Replay Model**\n- Pros:\n  - Simple: No server-side session state; each request is self-contained.\n  - Scales easily; any server can handle any request.\n  - Easier to recover from failures (just replay history).\n- Cons:\n  - Higher latency and bandwidth: Full conversation history sent each time.\n  - Context window limits: Long conversations may be truncated.\n  - Harder to manage per-user state beyond the conversation.\n\nChoose stateful for performance and advanced features; stateless for simplicity and scalability.",
+    "len": 1043,
+    "time_s": 5.5
+  },
+  {
+    "variant": "truncated_deep_a",
+    "response": "Certainly! Here\u2019s the continuation:\n\nThe failure modes are fundamentally different, and this matters more than just performance:\n\n- In a stateful session model, if the server loses state (due to crash, redeploy, or scaling event), the conversation context is lost unless you have robust persistence and recovery. This can lead to irrecoverable user experience issues if not handled carefully.\n- In a stateless replay model, the server is always reconstructing context from the client\u2019s data, so server-side failures don\u2019t impact the ability to continue the conversation. However, this puts more burden on the client and can lead to performance bottlenecks as histories grow.\n\nIn summary:  \n- Stateful = more efficient, but fragile to server failures unless you persist state.  \n- Stateless = more robust, but can be slower and more bandwidth-intensive for long conversations.  \n- The right choice depends on your reliability requirements, expected conversation length, and infrastructure constraints.",
+    "len": 1000,
+    "time_s": 3.6,
+    "continuity_heuristic": "FRESH"
+  },
+  {
+    "variant": "truncated_deep_b",
+    "response": "Certainly! Continuing from where I left off:\n\nConsider what happens when:\n\n- The client disconnects or crashes mid-conversation. In a stateful model, you risk losing all context unless you persist state, which adds complexity. In a stateless replay model, you can reconstruct the session by replaying the message history, making recovery easier.\n- You need to scale horizontally. Stateless replay allows any server to handle any request, since all context is in the payload. Stateful models require sticky sessions or distributed state management, which complicates scaling.\n- You want to support features like undo, audit, or time travel. Stateless replay naturally enables these, since the full history is available. Stateful models require explicit logging or snapshotting.\n- Performance is critical. Stateful models avoid redundant computation by maintaining context, leading to lower latency and cost per turn. Stateless replay can be slower, especially for long histories, unless you implement caching or checkpointing.\n\nIn summary: stateful is simpler and faster for short, stable sessions, but stateless replay is more robust, scalable, and flexible for complex or long-lived interactions. Many production systems use a hybrid: stateless replay for resilience, with periodic stateful checkpoints for performance.",
+    "len": 1320,
+    "time_s": 6.0,
+    "continuity_heuristic": "FRESH"
+  },
+  {
+    "variant": "truncated_deep_c",
+    "response": "Certainly! Continuing from where I left off:\n\nFor failure recovery, the stateful model has a critical weakness: if the server loses its in-memory state (due to a crash, restart, or scaling event), the conversation context may be lost or corrupted, making it hard to resume or debug. In contrast, a stateless replay model reconstructs context from persisted messages, so recovery is as simple as replaying the conversation history\u2014much more robust.\n\nFor concurrency, stateful models can struggle with race conditions or out-of-order requests, since the server must carefully manage session state. Stateless replay models naturally support concurrent or out-of-order requests, as each request is self-contained and reconstructs the needed context.\n\nFor context integrity, stateless replay models make it easier to audit and verify exactly what the LLM saw for any given request, since the full message history is explicit. Stateful models risk subtle bugs if state is mutated incorrectly or diverges from the intended sequence.\n\nIn summary: stateful models can be simpler and more efficient for short-lived, single-threaded sessions, but stateless replay models offer superior robustness, auditability, and scalability\u2014especially for distributed or production systems.",
+    "len": 1266,
+    "time_s": 4.6,
+    "continuity_heuristic": "FRESH"
+  },
+  {
+    "variant": "chatml_deep_a",
+    "response": "Certainly! Continuing from where I left off:\n\nThe failure modes are fundamentally different:\n\n- **Stateful session model**: If the server loses state (e.g., crash, redeploy), the conversation context is lost, and recovery is difficult or impossible unless the client can resend the full history. This can lead to inconsistent or broken conversations.\n\n- **Stateless replay model**: The server is always reconstructing context from the client-provided history, so server failures or restarts are less disruptive. However, performance degrades as history grows, and clients must reliably store and transmit the entire conversation.\n\n**Summary**:  \n- Stateful = better performance, but fragile to server failures.  \n- Stateless = robust to failures, but can be slower and more bandwidth-intensive.  \nThe choice depends on your priorities: reliability vs. efficiency.",
+    "len": 863,
+    "time_s": 4.6,
+    "continuity_heuristic": "FRESH"
+  },
+  {
+    "variant": "native_roles_a",
+    "response": "Certainly! To summarize and continue:\n\n- Use a **stateful session model** if you need efficient handling of long conversations, want to store user-specific data, or require advanced features like undo, branching, or persistent context. However, be prepared for increased infrastructure complexity and session management overhead.\n\n- Use a **stateless replay model** if you prioritize simplicity, easy scaling, and fault tolerance, and your conversations are short enough to fit within the LLM\u2019s context window. This model is less suited for advanced session features or very long interactions.\n\nThe best choice depends on your scalability needs, feature requirements, and operational complexity tolerance.",
+    "len": 705,
+    "time_s": 3.7,
+    "continuity_heuristic": "FRESH"
+  },
+  {
+    "variant": "bare_a",
+    "response": "Absolutely, let\u2019s continue from where you left off:\n\nWhen a stateful session fails (e.g., due to a server crash, memory leak, or network partition), the entire conversational context can be lost or corrupted. This can result in:\n\n- Irrecoverable loss of user progress or context, requiring users to restart or re-explain.\n- Subtle bugs if session state becomes inconsistent or partially restored.\n- Harder debugging, as the server\u2019s internal state may not be easily inspectable or reproducible.\n\nIn contrast, the stateless replay model\u2019s main failure mode is performance degradation (slow requests, timeouts) as histories grow, but not context loss. The client always has the source of truth, so recovery is straightforward: just resend the full history. This makes stateless models more robust and debuggable, at the cost of efficiency.\n\n**Summary:**  \n- Stateful: Efficient, but fragile\u2014context loss is catastrophic.\n- Stateless: Robust, but can be slow\u2014performance degrades gracefully, but context is never lost.",
+    "len": 1015,
+    "time_s": 3.9,
+    "continuity_heuristic": "UNCLEAR"
+  },
+  {
+    "variant": "system_framed_a",
+    "response": "model fails (e.g., due to a lost or corrupted session), the user may lose all context and progress, leading to a poor experience and potentially unrecoverable errors. In contrast, the stateless replay model is more resilient: as long as the client retains the conversation history, the server can always reconstruct the state, making it easier to recover from server-side failures or migrations.\n\n**Summary:**  \n- Stateful: More efficient, but fragile to server failures.  \n- Stateless: More robust, but can be slower and more bandwidth-intensive for long conversations.  \n- Choice depends on your priorities: efficiency vs. resilience and recoverability.",
+    "len": 655,
+    "time_s": 3.2,
+    "continuity_heuristic": "UNCLEAR"
+  }
+]

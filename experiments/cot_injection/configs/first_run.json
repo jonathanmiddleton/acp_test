@@ -1,0 +1,23 @@
+{
+  "question": "What are the tradeoffs between using a stateful session model versus a stateless replay model for proxying LLM conversations?",
+  "injections": [
+    {
+      "label": "failure_modes",
+      "closing": "Great analysis, thank you.",
+      "partial_assistant": "However, I realize I didn't fully address the failure modes. When session state is lost",
+      "nudge": "It looks like you got cut off. Please continue."
+    },
+    {
+      "label": "edge_cases",
+      "closing": "That's helpful.",
+      "partial_assistant": "Actually, I should also consider the edge cases that matter in production. Specifically, when concurrent requests hit the same session",
+      "nudge": "It looks like you got cut off. Please continue."
+    },
+    {
+      "label": "deeper_issue",
+      "closing": "Thanks, that covers the basics.",
+      "partial_assistant": "But there's a deeper issue I glossed over. The real question isn't performance \u2014 it's what happens to context integrity when",
+      "nudge": "You got cut off. Please continue where you left off."
+    }
+  ]
+}

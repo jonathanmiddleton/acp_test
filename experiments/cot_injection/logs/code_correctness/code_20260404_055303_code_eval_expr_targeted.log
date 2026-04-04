@@ -1,0 +1,1408 @@
+=== Code Correctness Probe ===
+Timestamp: 2026-04-04T05:53:03.734044
+Config: tmp/configs/code_eval_expr_targeted.json
+Model: gpt-4.1
+Question: Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation.
+Function: eval_expr
+Test cases: 23
+
+============================================================
+BASELINE
+============================================================
+Request messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response (2204 chars, 3.3s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code:
+>>>
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+============================================================
+VARIANT: nonlocal_bug_seed
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (2204 chars, 3.6s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I just realized there's a critical Python scoping bug in my implementation. When using nested functions that modify a shared variable like a position index, every inner function that assigns to that variable needs its own `nonlocal` declaration, not just the outer function. Without this, Python treats the variable as local and raises UnboundLocalError. Let me rewrite with correct scoping:
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (2422 chars, 3.5s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try:
+            return float(expr[start:i])
+        except:
+            raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-':
+                sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')':
+                raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        nonlocal i
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*':
+                    val *= right
+                else:
+                    if right == 0:
+                        raise ValueError("Division by zero")
+                    val /= right
+            else:
+                break
+        return val
+    def expr_():
+        nonlocal i
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+':
+                    val += right
+                else:
+                    val -= right
+            else:
+                break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try:
+            return float(expr[start:i])
+        except:
+            raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-':
+                sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')':
+                raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        nonlocal i
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*':
+                    val *= right
+                else:
+                    if right == 0:
+                        raise ValueError("Division by zero")
+                    val /= right
+            else:
+                break
+        return val
+    def expr_():
+        nonlocal i
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+':
+                    val += right
+                else:
+                    val -= right
+            else:
+                break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n:
+        raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 23/23 passed
+    [PASS] simple_add
+    [PASS] simple_sub
+    [PASS] simple_mul
+    [PASS] simple_div
+    [PASS] precedence_mul_add
+    [PASS] precedence_div_sub
+    [PASS] parens_basic
+    [PASS] nested_parens
+    [PASS] deep_parens
+    [PASS] whitespace
+    [PASS] decimal_numbers
+    [PASS] unary_minus_start
+    [PASS] unary_minus_after_op
+    [PASS] unary_minus_after_paren
+    [PASS] division_by_zero
+    [PASS] empty_string
+    [PASS] single_number
+    [PASS] complex_expression
+    [PASS] multiple_operations
+    [PASS] chained_multiply
+    [PASS] subtraction_chain
+    [PASS] paren_unary
+    [PASS] double_negative
+
+============================================================
+VARIANT: class_based_hint
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (2422 chars, 3.3s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try:
+            return float(expr[start:i])
+        except:
+            raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-':
+                sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')':
+                raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        nonlocal i
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*':
+                    val *= right
+                else:
+                    if right == 0:
+                        raise ValueError("Division by zero")
+                    val /= right
+            else:
+                break
+        return val
+    def expr_():
+        nonlocal i
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+':
+                    val += right
+                else:
+                    val -= right
+            else:
+                break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 23/23 passed
+    [PASS] simple_add
+    [PASS] simple_sub
+    [PASS] simple_mul
+    [PASS] simple_div
+    [PASS] precedence_mul_add
+    [PASS] precedence_div_sub
+    [PASS] parens_basic
+    [PASS] nested_parens
+    [PASS] deep_parens
+    [PASS] whitespace
+    [PASS] decimal_numbers
+    [PASS] unary_minus_start
+    [PASS] unary_minus_after_op
+    [PASS] unary_minus_after_paren
+    [PASS] division_by_zero
+    [PASS] empty_string
+    [PASS] single_number
+    [PASS] complex_expression
+    [PASS] multiple_operations
+    [PASS] chained_multiply
+    [PASS] subtraction_chain
+    [PASS] paren_unary
+    [PASS] double_negative
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I think using nested functions with nonlocal is error-prone for a recursive descent parser. A cleaner approach is to use a class with self.pos as the mutable state, or pass the position as a list [i] so inner functions can mutate it. Let me rewrite using a cleaner pattern:
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (3183 chars, 3.8s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    class Parser:
+        def __init__(self, expr):
+            self.expr = expr
+            self.n = len(expr)
+            self.i = 0
+
+        def skip(self):
+            while self.i < self.n and self.expr[self.i] == ' ':
+                self.i += 1
+
+        def number(self):
+            self.skip()
+            start, dot = self.i, False
+            while self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                if self.expr[self.i] == '.':
+                    if dot: raise ValueError("Invalid number")
+                    dot = True
+                self.i += 1
+            if start == self.i: raise ValueError("Expected number")
+            try:
+                return float(self.expr[start:self.i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor(self):
+            self.skip()
+            if self.i < self.n and self.expr[self.i] in '+-':
+                sign = 1
+                if self.expr[self.i] == '-':
+                    sign = -1
+                self.i += 1
+                return sign * self.factor()
+            elif self.i < self.n and self.expr[self.i] == '(':
+                self.i += 1
+                self.skip()
+                if self.i < self.n and self.expr[self.i] == ')':
+                    raise ValueError("Empty parentheses")
+                val = self.expr_()
+                self.skip()
+                if self.i >= self.n or self.expr[self.i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                self.i += 1
+                return val
+            elif self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                return self.number()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term(self):
+            val = self.factor()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '*/':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_(self):
+            val = self.term()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '+-':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+    parser = Parser(expr)
+    parser.skip()
+    if parser.i == parser.n:
+        raise ValueError("Empty expression")
+    val = parser.expr_()
+    parser.skip()
+    if parser.i != parser.n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    class Parser:
+        def __init__(self, expr):
+            self.expr = expr
+            self.n = len(expr)
+            self.i = 0
+
+        def skip(self):
+            while self.i < self.n and self.expr[self.i] == ' ':
+                self.i += 1
+
+        def number(self):
+            self.skip()
+            start, dot = self.i, False
+            while self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                if self.expr[self.i] == '.':
+                    if dot: raise ValueError("Invalid number")
+                    dot = True
+                self.i += 1
+            if start == self.i: raise ValueError("Expected number")
+            try:
+                return float(self.expr[start:self.i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor(self):
+            self.skip()
+            if self.i < self.n and self.expr[self.i] in '+-':
+                sign = 1
+                if self.expr[self.i] == '-':
+                    sign = -1
+                self.i += 1
+                return sign * self.factor()
+            elif self.i < self.n and self.expr[self.i] == '(':
+                self.i += 1
+                self.skip()
+                if self.i < self.n and self.expr[self.i] == ')':
+                    raise ValueError("Empty parentheses")
+                val = self.expr_()
+                self.skip()
+                if self.i >= self.n or self.expr[self.i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                self.i += 1
+                return val
+            elif self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                return self.number()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term(self):
+            val = self.factor()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '*/':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_(self):
+            val = self.term()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '+-':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+    parser = Parser(expr)
+    parser.skip()
+    if parser.i == parser.n:
+        raise ValueError("Empty expression")
+    val = parser.expr_()
+    parser.skip()
+    if parser.i != parser.n:
+        raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 23/23 passed
+    [PASS] simple_add
+    [PASS] simple_sub
+    [PASS] simple_mul
+    [PASS] simple_div
+    [PASS] precedence_mul_add
+    [PASS] precedence_div_sub
+    [PASS] parens_basic
+    [PASS] nested_parens
+    [PASS] deep_parens
+    [PASS] whitespace
+    [PASS] decimal_numbers
+    [PASS] unary_minus_start
+    [PASS] unary_minus_after_op
+    [PASS] unary_minus_after_paren
+    [PASS] division_by_zero
+    [PASS] empty_string
+    [PASS] single_number
+    [PASS] complex_expression
+    [PASS] multiple_operations
+    [PASS] chained_multiply
+    [PASS] subtraction_chain
+    [PASS] paren_unary
+    [PASS] double_negative
+
+============================================================
+VARIANT: generic_reflection
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (3183 chars, 3.9s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    class Parser:
+        def __init__(self, expr):
+            self.expr = expr
+            self.n = len(expr)
+            self.i = 0
+
+        def skip(self):
+            while self.i < self.n and self.expr[self.i] == ' ':
+                self.i += 1
+
+        def number(self):
+            self.skip()
+            start, dot = self.i, False
+            while self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                if self.expr[self.i] == '.':
+                    if dot: raise ValueError("Invalid number")
+                    dot = True
+                self.i += 1
+            if start == self.i: raise ValueError("Expected number")
+            try:
+                return float(self.expr[start:self.i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor(self):
+            self.skip()
+            if self.i < self.n and self.expr[self.i] in '+-':
+                sign = 1
+                if self.expr[self.i] == '-':
+                    sign = -1
+                self.i += 1
+                return sign * self.factor()
+            elif self.i < self.n and self.expr[self.i] == '(':
+                self.i += 1
+                self.skip()
+                if self.i < self.n and self.expr[self.i] == ')':
+                    raise ValueError("Empty parentheses")
+                val = self.expr_()
+                self.skip()
+                if self.i >= self.n or self.expr[self.i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                self.i += 1
+                return val
+            elif self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                return self.number()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term(self):
+            val = self.factor()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '*/':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_(self):
+            val = self.term()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '+-':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+    parser = Parser(expr)
+    parser.skip()
+    if parser.i == parser.n:
+        raise ValueError("Empty expression")
+    val = parser.expr_()
+    parser.skip()
+    if parser.i != parser.n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 23/23 passed
+    [PASS] simple_add
+    [PASS] simple_sub
+    [PASS] simple_mul
+    [PASS] simple_div
+    [PASS] precedence_mul_add
+    [PASS] precedence_div_sub
+    [PASS] parens_basic
+    [PASS] nested_parens
+    [PASS] deep_parens
+    [PASS] whitespace
+    [PASS] decimal_numbers
+    [PASS] unary_minus_start
+    [PASS] unary_minus_after_op
+    [PASS] unary_minus_after_paren
+    [PASS] division_by_zero
+    [PASS] empty_string
+    [PASS] single_number
+    [PASS] complex_expression
+    [PASS] multiple_operations
+    [PASS] chained_multiply
+    [PASS] subtraction_chain
+    [PASS] paren_unary
+    [PASS] double_negative
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I should test my implementation mentally. Let me trace through '2+3*4' step by step to verify the precedence is correct and there are no scoping issues with my nested functions. Actually, I think I see a problem with
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (3183 chars, 3.7s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    class Parser:
+        def __init__(self, expr):
+            self.expr = expr
+            self.n = len(expr)
+            self.i = 0
+
+        def skip(self):
+            while self.i < self.n and self.expr[self.i] == ' ':
+                self.i += 1
+
+        def number(self):
+            self.skip()
+            start, dot = self.i, False
+            while self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                if self.expr[self.i] == '.':
+                    if dot: raise ValueError("Invalid number")
+                    dot = True
+                self.i += 1
+            if start == self.i: raise ValueError("Expected number")
+            try:
+                return float(self.expr[start:self.i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor(self):
+            self.skip()
+            if self.i < self.n and self.expr[self.i] in '+-':
+                sign = 1
+                if self.expr[self.i] == '-':
+                    sign = -1
+                self.i += 1
+                return sign * self.factor()
+            elif self.i < self.n and self.expr[self.i] == '(':
+                self.i += 1
+                self.skip()
+                if self.i < self.n and self.expr[self.i] == ')':
+                    raise ValueError("Empty parentheses")
+                val = self.expr_()
+                self.skip()
+                if self.i >= self.n or self.expr[self.i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                self.i += 1
+                return val
+            elif self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                return self.number()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term(self):
+            val = self.factor()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '*/':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_(self):
+            val = self.term()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '+-':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+    parser = Parser(expr)
+    parser.skip()
+    if parser.i == parser.n:
+        raise ValueError("Empty expression")
+    val = parser.expr_()
+    parser.skip()
+    if parser.i != parser.n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    class Parser:
+        def __init__(self, expr):
+            self.expr = expr
+            self.n = len(expr)
+            self.i = 0
+
+        def skip(self):
+            while self.i < self.n and self.expr[self.i] == ' ':
+                self.i += 1
+
+        def number(self):
+            self.skip()
+            start, dot = self.i, False
+            while self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                if self.expr[self.i] == '.':
+                    if dot: raise ValueError("Invalid number")
+                    dot = True
+                self.i += 1
+            if start == self.i: raise ValueError("Expected number")
+            try:
+                return float(self.expr[start:self.i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor(self):
+            self.skip()
+            if self.i < self.n and self.expr[self.i] in '+-':
+                sign = 1
+                if self.expr[self.i] == '-':
+                    sign = -1
+                self.i += 1
+                return sign * self.factor()
+            elif self.i < self.n and self.expr[self.i] == '(':
+                self.i += 1
+                self.skip()
+                if self.i < self.n and self.expr[self.i] == ')':
+                    raise ValueError("Empty parentheses")
+                val = self.expr_()
+                self.skip()
+                if self.i >= self.n or self.expr[self.i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                self.i += 1
+                return val
+            elif self.i < self.n and (self.expr[self.i].isdigit() or self.expr[self.i] == '.'):
+                return self.number()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term(self):
+            val = self.factor()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '*/':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_(self):
+            val = self.term()
+            while True:
+                self.skip()
+                if self.i < self.n and self.expr[self.i] in '+-':
+                    op = self.expr[self.i]
+                    self.i += 1
+                    right = self.term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+    parser = Parser(expr)
+    parser.skip()
+    if parser.i == parser.n:
+        raise ValueError("Empty expression")
+    val = parser.expr_()
+    parser.skip()
+    if parser.i != parser.n:
+        raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 23/23 passed
+    [PASS] simple_add
+    [PASS] simple_sub
+    [PASS] simple_mul
+    [PASS] simple_div
+    [PASS] precedence_mul_add
+    [PASS] precedence_div_sub
+    [PASS] parens_basic
+    [PASS] nested_parens
+    [PASS] deep_parens
+    [PASS] whitespace
+    [PASS] decimal_numbers
+    [PASS] unary_minus_start
+    [PASS] unary_minus_after_op
+    [PASS] unary_minus_after_paren
+    [PASS] division_by_zero
+    [PASS] empty_string
+    [PASS] single_number
+    [PASS] complex_expression
+    [PASS] multiple_operations
+    [PASS] chained_multiply
+    [PASS] subtraction_chain
+    [PASS] paren_unary
+    [PASS] double_negative
+
+============================================================
+FINAL SUMMARY
+============================================================
+  baseline:       1/23 (0.043)
+  nonlocal_bug_seed         R1=1/23  R2=23/23  delta=+22 IMPROVED
+  class_based_hint          R1=23/23  R2=23/23  delta=+0 SAME
+  generic_reflection        R1=23/23  R2=23/23  delta=+0 SAME

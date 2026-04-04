@@ -1,0 +1,559 @@
+[
+  {
+    "variant": "baseline",
+    "response": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = [intervals[0]]\n    for current in intervals[1:]:\n        last = merged[-1]\n        if current[0] <= last[1]:\n            last[1] = max(last[1], current[1])\n        else:\n            merged.append(current)\n    return merged\n```",
+    "code": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = [intervals[0]]\n    for current in intervals[1:]:\n        last = merged[-1]\n        if current[0] <= last[1]:\n            last[1] = max(last[1], current[1])\n        else:\n            merged.append(current)\n    return merged",
+    "passed": 15,
+    "total": 15,
+    "pass_rate": 1.0,
+    "time_s": 2.5,
+    "test_details": [
+      {
+        "label": "basic_overlap",
+        "passed": true,
+        "input": [
+          [
+            1,
+            3
+          ],
+          [
+            2,
+            6
+          ],
+          [
+            8,
+            10
+          ],
+          [
+            15,
+            18
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            6
+          ],
+          [
+            8,
+            10
+          ],
+          [
+            15,
+            18
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            6
+          ],
+          [
+            8,
+            10
+          ],
+          [
+            15,
+            18
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "no_overlap",
+        "passed": true,
+        "input": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "all_overlap",
+        "passed": true,
+        "input": [
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            3,
+            6
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            6
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            6
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "empty_input",
+        "passed": true,
+        "input": [],
+        "expected": [],
+        "actual": [],
+        "error": null
+      },
+      {
+        "label": "single_interval",
+        "passed": true,
+        "input": [
+          [
+            1,
+            5
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            5
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            5
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "touching_boundaries",
+        "passed": true,
+        "input": [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            3
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            3
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            3
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "contained_interval",
+        "passed": true,
+        "input": [
+          [
+            1,
+            10
+          ],
+          [
+            3,
+            5
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            10
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            10
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "unsorted_input",
+        "passed": true,
+        "input": [
+          [
+            3,
+            4
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "duplicate_intervals",
+        "passed": true,
+        "input": [
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            3
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            3
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "single_point_intervals",
+        "passed": true,
+        "input": [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "single_point_touching",
+        "passed": true,
+        "input": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            2
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            2
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "reverse_sorted",
+        "passed": true,
+        "input": [
+          [
+            5,
+            6
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "complex_overlap",
+        "passed": true,
+        "input": [
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            4
+          ]
+        ],
+        "expected": [
+          [
+            0,
+            4
+          ]
+        ],
+        "actual": [
+          [
+            0,
+            4
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "many_overlapping",
+        "passed": true,
+        "input": [
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            5
+          ]
+        ],
+        "expected": [
+          [
+            1,
+            5
+          ]
+        ],
+        "actual": [
+          [
+            1,
+            5
+          ]
+        ],
+        "error": null
+      },
+      {
+        "label": "negative_numbers",
+        "passed": true,
+        "input": [
+          [
+            -3,
+            -1
+          ],
+          [
+            -2,
+            0
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "expected": [
+          [
+            -3,
+            0
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "actual": [
+          [
+            -3,
+            0
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "error": null
+      }
+    ]
+  },
+  {
+    "variant": "edge_case_reflection",
+    "response_1": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    result = [intervals[0]]\n    for interval in intervals[1:]:\n        last = result[-1]\n        if interval[0] <= last[1]:\n            last[1] = max(last[1], interval[1])\n        else:\n            result.append(interval)\n    return result\n```",
+    "code_1": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    result = [intervals[0]]\n    for interval in intervals[1:]:\n        last = result[-1]\n        if interval[0] <= last[1]:\n            last[1] = max(last[1], interval[1])\n        else:\n            result.append(interval)\n    return result",
+    "r1_passed": 15,
+    "response_2": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged\n```",
+    "code_2": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged",
+    "r2_passed": 15,
+    "total": 15,
+    "r1_pass_rate": 1.0,
+    "r2_pass_rate": 1.0,
+    "delta": 0,
+    "direction": "SAME",
+    "time_r1": 1.5,
+    "time_r2": 3.0
+  },
+  {
+    "variant": "minimal_nudge",
+    "response_1": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged\n```",
+    "code_1": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged",
+    "r1_passed": 15,
+    "response_2": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged\n```",
+    "code_2": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged",
+    "r2_passed": 15,
+    "total": 15,
+    "r1_pass_rate": 1.0,
+    "r2_pass_rate": 1.0,
+    "delta": 0,
+    "direction": "SAME",
+    "time_r1": 1.4,
+    "time_r2": 1.3
+  },
+  {
+    "variant": "specific_bug_seed",
+    "response_1": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged\n```",
+    "code_1": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged",
+    "r1_passed": 15,
+    "response_2": "```python\ndef merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged\n```",
+    "code_2": "def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = []\n    for interval in intervals:\n        if not merged or merged[-1][1] < interval[0]:\n            merged.append([interval[0], interval[1]])\n        else:\n            merged[-1][1] = max(merged[-1][1], interval[1])\n    return merged",
+    "r2_passed": 15,
+    "total": 15,
+    "r1_pass_rate": 1.0,
+    "r2_pass_rate": 1.0,
+    "delta": 0,
+    "direction": "SAME",
+    "time_r1": 1.4,
+    "time_r2": 1.4
+  }
+]

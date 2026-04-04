@@ -1,0 +1,242 @@
+[
+  {
+    "iteration": 1,
+    "variant": "baseline",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 1,
+    "variant": "exact_bug",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 1,
+    "variant": "category_scoping",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 1,
+    "variant": "category_scoping_mutation_edges",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 1,
+    "variant": "generic_quality",
+    "r1_passed": 0,
+    "r2_passed": 0,
+    "total": 23,
+    "delta": 0
+  },
+  {
+    "iteration": 1,
+    "variant": "no_injection",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 2,
+    "variant": "baseline",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 2,
+    "variant": "exact_bug",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 2,
+    "variant": "category_scoping",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 2,
+    "variant": "category_scoping_mutation_edges",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 2,
+    "variant": "generic_quality",
+    "r1_passed": 0,
+    "r2_passed": 0,
+    "total": 23,
+    "delta": 0
+  },
+  {
+    "iteration": 2,
+    "variant": "no_injection",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 3,
+    "variant": "baseline",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 3,
+    "variant": "exact_bug",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 3,
+    "variant": "category_scoping",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 3,
+    "variant": "category_scoping_mutation_edges",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 3,
+    "variant": "generic_quality",
+    "r1_passed": 0,
+    "r2_passed": 0,
+    "total": 23,
+    "delta": 0
+  },
+  {
+    "iteration": 3,
+    "variant": "no_injection",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 4,
+    "variant": "baseline",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 4,
+    "variant": "exact_bug",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 4,
+    "variant": "category_scoping",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 4,
+    "variant": "category_scoping_mutation_edges",
+    "r1_passed": 0,
+    "r2_passed": 1,
+    "total": 23,
+    "delta": 1
+  },
+  {
+    "iteration": 4,
+    "variant": "generic_quality",
+    "r1_passed": 0,
+    "r2_passed": 0,
+    "total": 23,
+    "delta": 0
+  },
+  {
+    "iteration": 4,
+    "variant": "no_injection",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 5,
+    "variant": "baseline",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  },
+  {
+    "iteration": 5,
+    "variant": "exact_bug",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 5,
+    "variant": "category_scoping",
+    "r1_passed": 0,
+    "r2_passed": 23,
+    "total": 23,
+    "delta": 23
+  },
+  {
+    "iteration": 5,
+    "variant": "category_scoping_mutation_edges",
+    "r1_passed": 0,
+    "r2_passed": 1,
+    "total": 23,
+    "delta": 1
+  },
+  {
+    "iteration": 5,
+    "variant": "generic_quality",
+    "r1_passed": 0,
+    "r2_passed": 0,
+    "total": 23,
+    "delta": 0
+  },
+  {
+    "iteration": 5,
+    "variant": "no_injection",
+    "r1_passed": 0,
+    "r2_passed": null,
+    "total": 23,
+    "delta": null
+  }
+]

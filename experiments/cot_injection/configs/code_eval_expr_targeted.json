@@ -1,0 +1,23 @@
+{
+  "question": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation.",
+  "injections": [
+    {
+      "label": "nonlocal_bug_seed",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I just realized there's a critical Python scoping bug in my implementation. When using nested functions that modify a shared variable like a position index, every inner function that assigns to that variable needs its own `nonlocal` declaration, not just the outer function. Without this, Python treats the variable as local and raises UnboundLocalError. Let me rewrite with correct scoping:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "class_based_hint",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I think using nested functions with nonlocal is error-prone for a recursive descent parser. A cleaner approach is to use a class with self.pos as the mutable state, or pass the position as a list [i] so inner functions can mutate it. Let me rewrite using a cleaner pattern:",
+      "nudge": "You got cut off. Please continue where you left off."
+    },
+    {
+      "label": "generic_reflection",
+      "closing": "Thanks.",
+      "partial_assistant": "But wait, I should test my implementation mentally. Let me trace through '2+3*4' step by step to verify the precedence is correct and there are no scoping issues with my nested functions. Actually, I think I see a problem with",
+      "nudge": "You got cut off. Please continue where you left off."
+    }
+  ]
+}

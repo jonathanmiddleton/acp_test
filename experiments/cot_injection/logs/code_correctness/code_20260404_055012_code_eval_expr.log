@@ -1,0 +1,1712 @@
+=== Code Correctness Probe ===
+Timestamp: 2026-04-04T05:50:12.493483
+Config: tmp/configs/code_eval_expr.json
+Model: gpt-4.1
+Question: Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation.
+Function: eval_expr
+Test cases: 23
+
+============================================================
+BASELINE
+============================================================
+Request messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response (2599 chars, 7.8s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    def parse():
+        nonlocal i
+        def skip():
+            while i < n and expr[i] == ' ':
+                i += 1
+
+        def number():
+            skip()
+            start = i
+            dot = False
+            while i < n and (expr[i].isdigit() or expr[i] == '.'):
+                if expr[i] == '.':
+                    if dot:
+                        raise ValueError("Invalid number")
+                    dot = True
+                i += 1
+            if start == i:
+                raise ValueError("Expected number")
+            try:
+                return float(expr[start:i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor():
+            skip()
+            if i < n and expr[i] == '(':
+                i += 1
+                val = expr_()
+                skip()
+                if i >= n or expr[i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                i += 1
+                return val
+            elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+                return number()
+            elif i < n and expr[i] in '+-':
+                sign = 1
+                if expr[i] == '-':
+                    sign = -1
+                i += 1
+                return sign * factor()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term():
+            val = factor()
+            while True:
+                skip()
+                if i < n and expr[i] in '*/':
+                    op = expr[i]
+                    i += 1
+                    right = factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_():
+            val = term()
+            while True:
+                skip()
+                if i < n and expr[i] in '+-':
+                    op = expr[i]
+                    i += 1
+                    right = term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+        return expr_()
+
+    expr = expr.strip()
+    i = 0
+    n = len(expr)
+    val = parse()
+    while i < n and expr[i] == ' ':
+        i += 1
+    if i != n:
+        raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code:
+>>>
+def eval_expr(expr: str) -> float:
+    def parse():
+        nonlocal i
+        def skip():
+            while i < n and expr[i] == ' ':
+                i += 1
+
+        def number():
+            skip()
+            start = i
+            dot = False
+            while i < n and (expr[i].isdigit() or expr[i] == '.'):
+                if expr[i] == '.':
+                    if dot:
+                        raise ValueError("Invalid number")
+                    dot = True
+                i += 1
+            if start == i:
+                raise ValueError("Expected number")
+            try:
+                return float(expr[start:i])
+            except:
+                raise ValueError("Invalid number")
+
+        def factor():
+            skip()
+            if i < n and expr[i] == '(':
+                i += 1
+                val = expr_()
+                skip()
+                if i >= n or expr[i] != ')':
+                    raise ValueError("Mismatched parenthesis")
+                i += 1
+                return val
+            elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+                return number()
+            elif i < n and expr[i] in '+-':
+                sign = 1
+                if expr[i] == '-':
+                    sign = -1
+                i += 1
+                return sign * factor()
+            else:
+                raise ValueError("Invalid factor")
+
+        def term():
+            val = factor()
+            while True:
+                skip()
+                if i < n and expr[i] in '*/':
+                    op = expr[i]
+                    i += 1
+                    right = factor()
+                    if op == '*':
+                        val *= right
+                    else:
+                        if right == 0:
+                            raise ValueError("Division by zero")
+                        val /= right
+                else:
+                    break
+            return val
+
+        def expr_():
+            val = term()
+            while True:
+                skip()
+                if i < n and expr[i] in '+-':
+                    op = expr[i]
+                    i += 1
+                    right = term()
+                    if op == '+':
+                        val += right
+                    else:
+                        val -= right
+                else:
+                    break
+            return val
+
+        return expr_()
+
+    expr = expr.strip()
+    i = 0
+    n = len(expr)
+    val = parse()
+    while i < n and expr[i] == ' ':
+        i += 1
+    if i != n:
+        raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 0/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] empty_string
+           input:    
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+============================================================
+VARIANT: edge_case_reflection
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (2019 chars, 4.0s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        elif i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I didn't handle several edge cases correctly. I need to reconsider what happens with negative numbers like -3+2, leading minus signs, double parentheses like ((1+2)), division by zero, whitespace in the expression, and expressions like 2*-3. Let me rewrite the function to handle all of these:
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (2019 chars, 3.1s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+============================================================
+VARIANT: minimal_nudge
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (2019 chars, 2.9s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I think there are parser edge cases I missed. Let me reconsider and rewrite more carefully:
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (2019 chars, 3.1s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+============================================================
+VARIANT: specific_bug_seed
+============================================================
+Request 1 messages: [{"role": "user", "content": "Implement a Python function `eval_expr(expr: str) -> float` that evaluates a mathematical expression string containing +, -, *, /, parentheses, and decimal numbers. It must handle operator precedence correctly (multiply/divide before add/subtract) and support nested parentheses. Do not use eval(), ast, or any imports. Raise ValueError for invalid expressions. Return only the function definition, no examples or explanation."}]
+
+Response 1 (2019 chars, 2.8s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+Request 2 packed content (verbatim):
+>>>
+Thanks.
+
+Assistant: But wait, I just realized my implementation doesn't correctly handle unary minus (e.g. -5 or 2*-3), and expressions with only whitespace or empty parentheses would crash. Also division by zero should raise ValueError not ZeroDivisionError. Let me fix this:
+
+User: You got cut off. Please continue where you left off.
+<<<
+
+Response 2 (2246 chars, 3.5s):
+>>>
+```python
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            # Check for empty parentheses
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+```
+<<<
+
+Extracted code (R2):
+>>>
+def eval_expr(expr: str) -> float:
+    i, n = 0, len(expr)
+    def skip():
+        nonlocal i
+        while i < n and expr[i] == ' ':
+            i += 1
+    def number():
+        nonlocal i
+        skip()
+        start, dot = i, False
+        while i < n and (expr[i].isdigit() or expr[i] == '.'):
+            if expr[i] == '.':
+                if dot: raise ValueError("Invalid number")
+                dot = True
+            i += 1
+        if start == i: raise ValueError("Expected number")
+        try: return float(expr[start:i])
+        except: raise ValueError("Invalid number")
+    def factor():
+        nonlocal i
+        skip()
+        if i < n and expr[i] in '+-':
+            sign = 1
+            if expr[i] == '-': sign = -1
+            i += 1
+            return sign * factor()
+        elif i < n and expr[i] == '(':
+            i += 1
+            skip()
+            # Check for empty parentheses
+            if i < n and expr[i] == ')':
+                raise ValueError("Empty parentheses")
+            val = expr_()
+            skip()
+            if i >= n or expr[i] != ')': raise ValueError("Mismatched parenthesis")
+            i += 1
+            return val
+        elif i < n and (expr[i].isdigit() or expr[i] == '.'):
+            return number()
+        else:
+            raise ValueError("Invalid factor")
+    def term():
+        val = factor()
+        while True:
+            skip()
+            if i < n and expr[i] in '*/':
+                op = expr[i]
+                i += 1
+                right = factor()
+                if op == '*': val *= right
+                else:
+                    if right == 0: raise ValueError("Division by zero")
+                    val /= right
+            else: break
+        return val
+    def expr_():
+        val = term()
+        while True:
+            skip()
+            if i < n and expr[i] in '+-':
+                op = expr[i]
+                i += 1
+                right = term()
+                if op == '+': val += right
+                else: val -= right
+            else: break
+        return val
+    skip()
+    if i == n:
+        raise ValueError("Empty expression")
+    val = expr_()
+    skip()
+    if i != n: raise ValueError("Invalid syntax")
+    return val
+<<<
+
+  Test results: 1/23 passed
+    [FAIL] simple_add
+           input:    1+2
+           expected: 3.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_sub
+           input:    5-3
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_mul
+           input:    3*4
+           expected: 12.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] simple_div
+           input:    10/4
+           expected: 2.5
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_mul_add
+           input:    2+3*4
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] precedence_div_sub
+           input:    10-6/3
+           expected: 8.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] parens_basic
+           input:    (2+3)*4
+           expected: 20.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] nested_parens
+           input:    ((1+2))*3
+           expected: 9.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] deep_parens
+           input:    ((2+3)*(4-1))
+           expected: 15.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] whitespace
+           input:     2 + 3 * 4 
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] decimal_numbers
+           input:    1.5+2.5
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_start
+           input:    -3+5
+           expected: 2.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_op
+           input:    2*-3
+           expected: -6.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] unary_minus_after_paren
+           input:    (-3+5)*2
+           expected: 4.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] division_by_zero
+           input:    1/0
+           expected: ValueError
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [PASS] empty_string
+    [FAIL] single_number
+           input:    42
+           expected: 42.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] complex_expression
+           input:    3+4*2/(1-5)
+           expected: 1.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] multiple_operations
+           input:    2+3+4+5
+           expected: 14.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] chained_multiply
+           input:    2*3*4
+           expected: 24.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] subtraction_chain
+           input:    10-3-2
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] paren_unary
+           input:    -(3+2)
+           expected: -5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+    [FAIL] double_negative
+           input:    --5
+           expected: 5.0
+           actual:   None
+           error:    cannot access local variable 'i' where it is not associated with a value
+
+============================================================
+FINAL SUMMARY
+============================================================
+  baseline:       0/23 (0.0)
+  edge_case_reflection      R1=1/23  R2=1/23  delta=+0 SAME
+  minimal_nudge             R1=1/23  R2=1/23  delta=+0 SAME
+  specific_bug_seed         R1=1/23  R2=1/23  delta=+0 SAME

@@ -1,0 +1,92 @@
+[
+  {
+    "variant": "baseline",
+    "response": "Here\u2019s a concise assessment:\n\nStateful session model:\n- Pros: Fast access to conversation history, supports complex context management, easier for real-time updates and multi-turn logic.\n- Cons: Requires server-side storage, can be harder to scale horizontally, session loss risks data loss.\n\nStateless replay model:\n- Pros: Scales easily (no server-side state), robust to server restarts, easier to cache and audit.\n- Cons: Replaying long histories is slow, can be expensive, harder to support dynamic context changes or partial updates.\n\nChoice depends on scale, performance, and flexibility needs.",
+    "response_len": 600,
+    "time_s": 3.0
+  },
+  {
+    "variant": "user_framed_reflection",
+    "injection": "But wait, let me reconsider. I should think about this more carefully before giving my final assessment. There are several aspects I may have overlooked:",
+    "turn_1": {
+      "response": "Stateful session model:\n- Pros: Fast context access, supports dynamic updates, efficient for long conversations.\n- Cons: Requires server-side storage, more complex scaling, risk of session loss.\n\nStateless replay model:\n- Pros: Easier to scale, no server-side state, robust to failures, good for auditing.\n- Cons: Slower (must replay history), costly for long sessions, less flexible for mid-session changes.\n\nSummary: Stateful is efficient but harder to scale; stateless is scalable but can be slower and less flexible. Choose based on performance, scalability, and operational needs.",
+      "len": 585,
+      "time_s": 2.0
+    },
+    "turn_2": {
+      "response": "Absolutely\u2014taking time to reconsider is wise. There are nuanced aspects to weigh, such as:\n\n- Security and privacy (session data exposure, replay risks)\n- Cost implications (storage vs. compute)\n- Fault tolerance and recovery\n- Support for features like undo, branching, or partial context\n- Operational complexity (session management, stateless orchestration)\n- Real-time collaboration or multi-user scenarios\n\nIf you\u2019d like, I can help you break down these aspects in more detail or compare them for your specific use case. Let me know how you\u2019d like to proceed!",
+      "len": 564,
+      "time_s": 2.1
+    },
+    "turn_3": {
+      "response": "Certainly! Here are additional considerations:\n\n- Security: Stateful models risk leaking sensitive data if sessions are compromised; stateless models may expose full histories if logs are replayed.\n- Cost: Stateful requires persistent storage; stateless incurs compute cost on every replay.\n- Flexibility: Stateful allows mid-session edits and dynamic context; stateless is rigid but easier to audit.\n- Fault tolerance: Stateless is resilient to server crashes; stateful may lose data if not persisted.\n- Collaboration: Stateful can support real-time multi-user edits; stateless struggles with concurrent changes.\n\nThe best choice depends on your priorities: performance, auditability, scalability, and feature needs.",
+      "len": 717,
+      "time_s": 2.3
+    },
+    "total_output_len": 1866,
+    "total_time_s": 6.4
+  },
+  {
+    "variant": "explicit_continue",
+    "injection": "You were about to reconsider some aspects of your answer. What did you overlook?",
+    "turn_1": {
+      "response": "Stateful session model:\n- Pros: Fast context access, supports dynamic updates, efficient for long or complex conversations, easier real-time collaboration.\n- Cons: Requires server-side storage, more complex scaling, risk of session loss or data leaks.\n\nStateless replay model:\n- Pros: Scales easily, no server-side state, robust to failures, easier to audit and cache.\n- Cons: Slower for long histories (must replay), higher compute cost, less flexible for mid-session changes or branching.\n\nChoose based on your needs for performance, scalability, auditability, and feature complexity.",
+      "len": 586,
+      "time_s": 1.8
+    },
+    "turn_2": {
+      "response": "Here are some aspects I may have initially overlooked:\n\n- Security: Stateful sessions risk leaking sensitive data if compromised; stateless models may expose full histories if logs are accessible.\n- Cost: Stateful models need persistent storage; stateless models can be expensive to replay long histories.\n- Collaboration: Stateful supports real-time multi-user edits; stateless struggles with concurrent changes.\n- Fault tolerance: Stateless is more resilient to server crashes; stateful may lose unsaved data.\n- Flexibility: Stateful allows mid-session edits and branching; stateless is more rigid but easier to audit.\n\nThese factors can significantly influence the best model for your use case.",
+      "len": 697,
+      "time_s": 1.9
+    },
+    "turn_3": {
+      "response": "Certainly! Additional considerations include:\n\n- Privacy: Stateful models may retain sensitive context longer, increasing exposure risk. Stateless models can be designed to minimize data retention.\n- Undo/branching: Stateful sessions can support undo or branching more naturally; stateless models require replaying and reconstructing state, which is complex.\n- Operational complexity: Stateful requires session management and cleanup; stateless simplifies operations but may complicate features like partial context updates.\n- Latency: Stateful is low-latency for context retrieval; stateless can introduce delays as history grows.\n\nThe right choice depends on your priorities for security, cost, flexibility, and operational simplicity.",
+      "len": 737,
+      "time_s": 3.6
+    },
+    "total_output_len": 2020,
+    "total_time_s": 7.3
+  },
+  {
+    "variant": "socratic_push",
+    "injection": "That's a reasonable first pass, but I think you're missing some important tradeoffs. What about failure modes? What happens when session state is lost?",
+    "turn_1": {
+      "response": "Stateful session model:\n- Pros: Fast context access, supports dynamic updates, efficient for long or interactive conversations, easier real-time collaboration.\n- Cons: Needs server-side storage, more complex scaling, risk of session loss or data leaks, requires session management.\n\nStateless replay model:\n- Pros: Scales easily, no server-side state, robust to failures, easier to audit and cache, simpler operations.\n- Cons: Slower for long histories (must replay), higher compute cost, less flexible for mid-session changes, harder to support undo/branching.\n\nChoose based on your needs for performance, scalability, auditability, and operational complexity.",
+      "len": 661,
+      "time_s": 1.9
+    },
+    "turn_2": {
+      "response": "Great point! Failure modes are critical:\n\n- Stateful: If session state is lost (e.g., server crash, memory loss), the conversation context is gone\u2014users may need to restart or lose progress. Persistent storage can mitigate this, but adds complexity and cost.\n\n- Stateless: Since all context is reconstructed from the full history, losing server state is less problematic\u2014just replay the history. However, if the history log is lost or corrupted, recovery is impossible.\n\nIn summary: stateful risks abrupt loss of context; stateless is more resilient to server failures but depends entirely on reliable history storage.",
+      "len": 618,
+      "time_s": 2.4
+    },
+    "turn_3": {
+      "response": "Continuing on failure modes:\n\n- Stateful: To reduce risk, you can persist sessions to disk or a database, but this adds latency and operational overhead. If persistence isn\u2019t immediate, there\u2019s a window for data loss. Recovery may be partial or impossible if backups are stale.\n\n- Stateless: As long as the full conversation history is reliably logged and accessible, you can always reconstruct state after a crash or migration. However, if the log grows very large, replaying it can become slow, and log corruption or loss is catastrophic.\n\nBoth models require careful design for durability and recovery.",
+      "len": 605,
+      "time_s": 2.5
+    },
+    "total_output_len": 1884,
+    "total_time_s": 6.8
+  },
+  {
+    "variant": "prefilled_assistant",
+    "injection": "[Continuing my analysis]\n\nActually, I realize I didn't fully address the failure modes. Let me reconsider the edge cases:",
+    "turn_1": {
+      "response": "Stateful session model:\n- Pros: Fast context access, supports dynamic updates, efficient for long or interactive conversations, easier real-time collaboration.\n- Cons: Needs server-side storage, complex scaling, risk of session loss (context lost if server fails), requires session management.\n\nStateless replay model:\n- Pros: Scales easily, robust to server failures (can reconstruct from logs), easier to audit/cache, simpler operations.\n- Cons: Slower for long histories (must replay), higher compute cost, less flexible for mid-session changes, catastrophic if logs are lost/corrupted.\n\nChoose based on your needs for performance, durability, scalability, and operational complexity.",
+      "len": 687,
+      "time_s": 2.7
+    },
+    "turn_2": {
+      "response": "Absolutely, edge cases in failure modes are crucial:\n\n- Stateful: If the session state is lost (e.g., memory crash, server restart), all in-progress context is lost unless persistently saved. Even with persistence, there\u2019s a risk of partial loss if writes lag. Recovery may be incomplete, and users may experience abrupt resets.\n\n- Stateless: If the conversation log is intact, you can always reconstruct state, making it resilient to server failures. However, if the log is lost or corrupted, recovery is impossible\u2014there\u2019s no backup context.\n\nEdge cases highlight the need for robust persistence and backup strategies in both models, but especially for stateless, log durability is everything.",
+      "len": 695,
+      "time_s": 2.2
+    },
+    "turn_3": {
+      "response": "Continuing with edge cases:\n\n- Stateful: If multiple servers are involved (e.g., load balancing), session state must be shared or replicated, increasing complexity and risk of inconsistency. Network partitions or partial failures can cause session desynchronization or split-brain scenarios.\n\n- Stateless: Replay can become prohibitively slow as history grows, impacting user experience. If the log is tampered with, replayed state may be incorrect or insecure. Also, stateless models struggle with features like \u201cforget last message\u201d or selective redaction, since the log is the single source of truth.\n\nBoth models require careful design for reliability, consistency, and security in edge cases.",
+      "len": 697,
+      "time_s": 2.6
+    },
+    "total_output_len": 2079,
+    "total_time_s": 7.6
+  }
+]
