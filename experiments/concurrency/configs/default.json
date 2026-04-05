@@ -1,0 +1,89 @@
+{
+  "model": "gpt-4.1",
+  "prompt": "What is 2 + 2? Answer with just the number.",
+  "prompt_timeout_s": 120.0,
+  "warmup_prompt": "Say hello in one word.",
+  "tests": [
+    {
+      "label": "baseline_sequential",
+      "description": "Sequential prompts on one session, one process. Establishes per-prompt latency baseline.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 3
+    },
+    {
+      "label": "intra_parallel_sessions_2",
+      "description": "2 parallel sessions on one process.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2
+    },
+    {
+      "label": "intra_parallel_sessions_4",
+      "description": "4 parallel sessions on one process.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 4,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "intra_parallel_sessions_8",
+      "description": "8 parallel sessions on one process.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 8,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8
+    },
+    {
+      "label": "intra_same_session_2",
+      "description": "2 parallel prompts on the SAME session (expected: cancellation or error).",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 2,
+      "total_prompts": 2
+    },
+    {
+      "label": "inter_process_2",
+      "description": "2 processes, 1 session each, prompted in parallel.",
+      "mode": "inter_process",
+      "num_processes": 2,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2
+    },
+    {
+      "label": "inter_process_4",
+      "description": "4 processes, 1 session each, prompted in parallel.",
+      "mode": "inter_process",
+      "num_processes": 4,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "inter_process_2x2",
+      "description": "2 processes, 2 sessions each, all prompted in parallel.",
+      "mode": "inter_process",
+      "num_processes": 2,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "inter_process_4x2",
+      "description": "4 processes, 2 sessions each, all prompted in parallel.",
+      "mode": "inter_process",
+      "num_processes": 4,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "model": "gpt-4.1",
+  "prompt": "What is 2 + 2? Answer with just the number.",
+  "prompt_timeout_s": 120.0,
+  "warmup_prompt": "Say hello in one word.",
+  "tests": [
+    {
+      "label": "seq_baseline",
+      "description": "Sequential baseline: 5 prompts, 1 session, 1 process.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 5
+    },
+    {
+      "label": "intra_1",
+      "description": "1 session (parallel control).",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 1
+    },
+    {
+      "label": "intra_2",
+      "description": "2 parallel sessions.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2
+    },
+    {
+      "label": "intra_4",
+      "description": "4 parallel sessions.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 4,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "intra_8",
+      "description": "8 parallel sessions.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 8,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8
+    },
+    {
+      "label": "intra_12",
+      "description": "12 parallel sessions.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 12,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 12
+    },
+    {
+      "label": "intra_16",
+      "description": "16 parallel sessions.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 16,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 16
+    }
+  ]
+}

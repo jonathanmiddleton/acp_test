@@ -1,0 +1,89 @@
+{
+  "model": "gpt-4.1",
+  "prompt": "List exactly 5 prime numbers greater than 100, one per line, numbers only.",
+  "prompt_timeout_s": 120.0,
+  "warmup_prompt": "Say hello in one word.",
+  "tests": [
+    {
+      "label": "baseline_sequential_long",
+      "description": "Sequential prompts on one session, one process. Longer response baseline.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 3
+    },
+    {
+      "label": "intra_2_long",
+      "description": "2 parallel sessions on one process, longer response.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2
+    },
+    {
+      "label": "intra_4_long",
+      "description": "4 parallel sessions on one process, longer response.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 4,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "intra_8_long",
+      "description": "8 parallel sessions on one process, longer response.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 8,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8
+    },
+    {
+      "label": "inter_2_long",
+      "description": "2 processes, 1 session each, longer response.",
+      "mode": "inter_process",
+      "num_processes": 2,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2
+    },
+    {
+      "label": "inter_4_long",
+      "description": "4 processes, 1 session each, longer response.",
+      "mode": "inter_process",
+      "num_processes": 4,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4
+    },
+    {
+      "label": "inter_4x2_long",
+      "description": "4 processes, 2 sessions each, longer response.",
+      "mode": "inter_process",
+      "num_processes": 4,
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8
+    },
+    {
+      "label": "intra_same_session_2_long",
+      "description": "2 parallel prompts on SAME session, longer response.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 2,
+      "total_prompts": 2
+    },
+    {
+      "label": "intra_same_session_3_long",
+      "description": "3 parallel prompts on SAME session, longer response.",
+      "mode": "intra_process",
+      "num_processes": 1,
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 3,
+      "total_prompts": 3
+    }
+  ]
+}

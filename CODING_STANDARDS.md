@@ -86,6 +86,28 @@ When something fails:
 | `WARNING` | Capability gaps, unexpected-but-handled conditions |
 | `ERROR` | Connection failures, unexpected crashes, protocol violations |
 
+## LLM Response Integrity
+
+Never truncate, slice, or summarize LLM responses in logs, stored results,
+or experiment output. Every response must be preserved verbatim and in full.
+
+This project is in an exploratory phase where every response is potential
+evidence for understanding ACP behavior, debugging protocol issues, or
+performing later analysis (token throughput, content verification, CoT
+detection). Truncated data cannot be recovered — the cost of re-running an
+experiment to get the data you threw away is always higher than the cost of
+storing a few extra kilobytes.
+
+Specifically:
+- **Experiment JSON output** must store the complete response text, not a
+  preview or truncation.
+- **Log files** must include verbatim request and response content.
+- **Proxy logging** may summarize at INFO level for readability, but must
+  log the full content at DEBUG level.
+
+Log bloat is not a concern at this stage. Disk is cheap; lost evidence is
+expensive.
+
 ## Testing
 
 - Non-trivial changes must be backed by tests.
