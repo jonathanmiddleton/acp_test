@@ -85,6 +85,13 @@ experiment isolates round-trip overhead from generation time.
 - **Tail latency increases with parallelism.** At 16 sessions with a
   688-token response, p50 is ~6.0s vs ~4.2s baseline, with occasional
   outliers to ~15s.
+- **Rate limiting is per-account, not per-model.** Mixed-model experiments
+  (gpt-4.1 + claude-haiku-4.5) show that gpt-4.1 per-prompt tok/s is
+  unchanged whether the remaining sessions use the same model or a different
+  one. At 8 total sessions: gpt-4.1 solo = 118 tok/s, gpt-4.1 in mixed
+  (4 of 8) = 122 tok/s. Mixing models does not unlock additional throughput
+  — all models share the same backend budget. This rules out model-diverse
+  session pools as a scaling strategy.
 
 ## Decision
 

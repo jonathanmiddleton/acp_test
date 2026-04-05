@@ -51,7 +51,29 @@ The bottleneck is the Copilot backend, not the local process. The language
 server is a thin async relay — all sessions multiplex over a single upstream
 connection, and the backend applies rate limiting or request serialization.
 
-### 2. Parallel prompts on the SAME session: cancellation
+### 2. Mixed models: rate limit is per-account, not per-model
+
+Tested gpt-4.1 + claude-haiku-4.5 sessions running concurrently on the same
+process. At each total session count, gpt-4.1 per-prompt tok/s is unchanged
+regardless of whether the other sessions use the same model or a different one:
+
+| Total sessions | gpt-4.1 solo (tok/s) | gpt-4.1 mixed (tok/s) | Delta |
+|---------------:|:--------------------:|:---------------------:|:-----:|
+| 2              | 169                  | 165                   | -3%   |
+| 4              | 152                  | 161                   | +6%   |
+| 8              | 118                  | 122                   | +4%   |
+| 12             | 119                  | 118                   | -1%   |
+| 16             | 113                  | 114                   | +1%   |
+
+All deltas are within noise. Mixing models does not unlock additional
+throughput — all models share the same backend rate limit budget. This rules
+out model-diverse session pools as a scaling strategy.
+
+Side finding: claude-haiku-4.5 leaks chain-of-thought reasoning into its
+response text (visible as "The user is asking..." preamble). This is CoT
+exposed via ACP with no separate reasoning token stream.
+
+### 3. Parallel prompts on the SAME session: cancellation
 
 Sending two concurrent `session/prompt` calls to the same session causes the
 server to cancel the earlier prompt:
@@ -66,7 +88,7 @@ produces any content; all others are cancelled or lose their update stream.
 **Conclusion**: one prompt at a time per session is a hard constraint, enforced
 server-side via cancellation. This is not an error — it's the designed behavior.
 
-### 3. Multiple processes: works, scales similarly to intra-process
+### 4. Multiple processes: works, scales similarly to intra-process
 
 Multiple copilot-language-server processes can run simultaneously with
 independent auth tokens (auto-discovered from `~/.config/github-copilot/`).
@@ -85,7 +107,7 @@ extra processes adds startup overhead (~3-5s per process for init + session
 creation + warmup) but does not improve throughput beyond what parallel sessions
 on one process already achieve.
 
-### 4. Session creation is slow, prompting is fast
+### 5. Session creation is slow, prompting is fast
 
 | Operation          | Latency     |
 |-------------------:|:-----------:|
@@ -180,6 +202,7 @@ configs/
   longer_prompt.json  Longer prompt, 9 test configurations
   scaling_curve.json         Intra-process p/s scaling: 1-16 sessions, trivial prompt
   scaling_curve_tokens.json  Intra-process tok/s scaling: 1-16 sessions, 688-token response
+  mixed_model_tokens.json   Mixed-model scaling: gpt-4.1 + haiku, 688-token response
 logs/                 Per-run output (gitignored)
 ```
 
