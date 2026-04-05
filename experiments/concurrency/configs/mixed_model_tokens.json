@@ -1,0 +1,87 @@
+{
+  "model": "gpt-4.1",
+  "prompt": "Review the following Python script for syntax errors. If it has no syntax errors, respond with only the complete script unchanged. If it has syntax errors, respond with only the corrected complete script. No explanation, no commentary, just the script.\n\n```python\nfrom __future__ import annotations\n\nimport heapq\nfrom dataclasses import dataclass, field\nfrom typing import Any, Iterator\n\n\n@dataclass(order=True)\nclass PrioritizedItem:\n    \"\"\"Wrapper that makes any payload comparable by priority.\"\"\"\n\n    priority: float\n    sequence: int = field(compare=True)\n    payload: Any = field(compare=False)\n\n\nclass BoundedPriorityQueue:\n    \"\"\"A thread-unsafe bounded priority queue backed by a min-heap.\n\n    Items with the lowest priority value are dequeued first.\n    When the queue is full, push silently drops items whose priority\n    is >= the current maximum (i.e., least urgent).\n    \"\"\"\n\n    def __init__(self, capacity: int) -> None:\n        if capacity <= 0:\n            raise ValueError(f\"Capacity must be positive, got {capacity}\")\n        self._capacity = capacity\n        self._heap: list[PrioritizedItem] = []\n        self._seq = 0\n\n    @property\n    def capacity(self) -> int:\n        return self._capacity\n\n    def __len__(self) -> int:\n        return len(self._heap)\n\n    def __bool__(self) -> bool:\n        return len(self._heap) > 0\n\n    def push(self, payload: Any, priority: float) -> bool:\n        \"\"\"Add an item. Returns True if accepted, False if dropped.\"\"\"\n        item = PrioritizedItem(\n            priority=priority, sequence=self._seq, payload=payload\n        )\n        self._seq += 1\n\n        if len(self._heap) < self._capacity:\n            heapq.heappush(self._heap, item)\n            return True\n\n        # Peek at the max item (we keep a min-heap, so max is expensive;\n        # for a bounded queue we accept O(n) here).\n        worst = max(self._heap)\n        if item < worst:\n            # Replace the worst item with the new one.\n            self._heap.remove(worst)\n            heapq.heapify(self._heap)\n            heapq.heappush(self._heap, item)\n            return True\n\n        return False\n\n    def pop(self) -> Any:\n        \"\"\"Remove and return the highest-priority (lowest value) payload.\"\"\"\n        if not self._heap:\n            raise IndexError(\"pop from empty queue\")\n        return heapq.heappop(self._heap).payload\n\n    def peek(self) -> Any:\n        \"\"\"Return the highest-priority payload without removing it.\"\"\"\n        if not self._heap:\n            raise IndexError(\"peek at empty queue\")\n        return self._heap[0].payload\n\n    def drain(self) -> Iterator[Any]:\n        \"\"\"Yield all payloads in priority order, emptying the queue.\"\"\"\n        while self._heap:\n            yield heapq.heappop(self._heap).payload\n\n    def __repr__(self) -> str:\n        items = sorted(self._heap)\n        inner = \", \".join(\n            f\"{it.payload!r}@{it.priority}\" for it in items\n        )\n        return f\"BoundedPriorityQueue(cap={self._capacity}, [{inner}])\"\n```",
+  "prompt_timeout_s": 120.0,
+  "warmup_prompt": "Say hello in one word.",
+  "tests": [
+    {
+      "label": "gpt41_n1",
+      "description": "gpt-4.1 alone, 1 session. Control \u2014 should match prior experiments.",
+      "mode": "intra_process",
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 1
+    },
+    {
+      "label": "haiku_n1",
+      "description": "claude-haiku-4.5 alone, 1 session. Baseline for second model.",
+      "mode": "intra_process",
+      "sessions_per_process": 1,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 1,
+      "models": [
+        "claude-haiku-4.5"
+      ]
+    },
+    {
+      "label": "mixed_n2",
+      "description": "1 gpt-4.1 + 1 claude-haiku-4.5, concurrent.",
+      "mode": "intra_process",
+      "sessions_per_process": 2,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 2,
+      "models": [
+        "gpt-4.1",
+        "claude-haiku-4.5"
+      ]
+    },
+    {
+      "label": "mixed_n4",
+      "description": "2 gpt-4.1 + 2 claude-haiku-4.5, concurrent.",
+      "mode": "intra_process",
+      "sessions_per_process": 4,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 4,
+      "models": [
+        "gpt-4.1",
+        "claude-haiku-4.5"
+      ]
+    },
+    {
+      "label": "mixed_n8",
+      "description": "4 gpt-4.1 + 4 claude-haiku-4.5, concurrent.",
+      "mode": "intra_process",
+      "sessions_per_process": 8,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 8,
+      "models": [
+        "gpt-4.1",
+        "claude-haiku-4.5"
+      ]
+    },
+    {
+      "label": "mixed_n12",
+      "description": "6 gpt-4.1 + 6 claude-haiku-4.5, concurrent.",
+      "mode": "intra_process",
+      "sessions_per_process": 12,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 12,
+      "models": [
+        "gpt-4.1",
+        "claude-haiku-4.5"
+      ]
+    },
+    {
+      "label": "mixed_n16",
+      "description": "8 gpt-4.1 + 8 claude-haiku-4.5, concurrent.",
+      "mode": "intra_process",
+      "sessions_per_process": 16,
+      "parallel_prompts_per_session": 1,
+      "total_prompts": 16,
+      "models": [
+        "gpt-4.1",
+        "claude-haiku-4.5"
+      ]
+    }
+  ]
+}
