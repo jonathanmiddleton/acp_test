@@ -200,9 +200,13 @@ Specifically:
   be estimated without new experiments:
   `mean_latency_s = T * (1 + k * N) / p0`. New environments need only
   a solo baseline run and one concurrent run to calibrate p0 and k.
-- **Per-session locks add complexity** but are necessary. The proxy currently
-  has no concurrency control. Meadow's multi-agent workload will require
-  explicit serialization.
+- **Per-session concurrency guard needed.** The proxy must prevent two
+  prompts from hitting the same ACP session simultaneously (causes
+  cancellation). A per-session asyncio semaphore is sufficient. Session
+  mapping itself is already handled by ADR-002's first-message hashing —
+  each OpenCode subsession (including hierarchical parent/child sessions)
+  naturally gets its own ACP session because each has a distinct first
+  user message.
 - **Model diversity is not a scaling lever.** All models share the same
   backend budget per account. Assigning agents to different models should
   be driven by capability needs, not throughput optimization.
