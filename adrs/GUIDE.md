@@ -1,5 +1,58 @@
 # Architectural Decision Records — Guide
 
+## Brief Motivation
+
+Our use of ADRs diverges from the textbook in several ways worth calling out
+up front.
+
+- **AI agents are the primary audience.** Traditional ADRs target human
+  engineers joining a team months later. Ours are consumed by AI agents at
+  the start of every session — agents that have no persistent memory and
+  need to reconstruct architectural context from scratch each time. ADRs
+  serve as durable institutional memory that compensates for the agent's
+  lack of it.
+
+- **They feed directly into enforceable rules.** In most projects, ADRs are
+  advisory — a developer reads them and exercises judgment. Here, ADRs are
+  extracted into `CODING_STANDARDS.md` which is injected into agent system
+  prompts. The ADR-to-standard pipeline makes decisions mechanically
+  enforceable, not just documented.
+
+- **The write cadence is higher.** A conventional team might produce a
+  handful of ADRs per quarter. This is partly because AI agents need
+  explicit written decisions for things a human team would absorb through
+  osmosis (pair programming, hallway conversations, code review norms). If
+  it is not written down, it does not exist for the agent.
+
+- **They encode negative results and operational constraints, not just
+  architecture.** [ADR-005](005-fail-loud-testing.md) (fail-loud testing)
+  documents an observed failure mode — silent test skips masking a wrong-
+  binary bug on the target machine — and the policy that prevents it.
+  These are closer to runbook entries than classical architecture decisions,
+  but they need the same "context + decision + rejected alternatives"
+  structure to prevent agents from re-introducing the problems.
+
+- **Rejected alternatives matter more.** For human teams, rejected
+  alternatives prevent re-litigation in meetings. For AI agents, they
+  prevent the agent from confidently proposing the exact approach that was
+  already evaluated and dismissed. Without that section, the agent has no
+  way to know that "just bypass the language server and call the Copilot
+  backend directly" was already considered and rejected for specific reasons
+  (see [ADR-001](001-acp-proxy-architecture.md)).
+
+- **They are versioned in-place more often.** Traditional ADRs are
+  immutable — you supersede, not edit. We sometimes append revision history
+  tables when the core decision holds but implementation details shift.
+  This is pragmatic: creating a new ADR for every tactical adjustment to an
+  existing decision would flood the index without adding clarity.
+
+- **They record empirical data, not just opinions.**
+  [ADR-009](009-intra-process-session-scaling.md) records throughput
+  measurements, fitted scaling model parameters, and derived latency
+  planning tables. This is unusual for ADRs but essential when the
+  "architecture decision" is a capacity planning policy grounded in data
+  rather than opinion.
+
 ## What is an ADR?
 
 An Architectural Decision Record (ADR) is a short document that captures a
@@ -25,21 +78,22 @@ write a new ADR that supersedes the old one; you do not edit the original.
    ADR with fresh information rather than guessing whether the original
    reasoning still holds.
 4. **Binding standards.** In this project, ADRs feed directly into
-   `CODING_STANDARDS.md`. A standard like "no print statements" traces back
-   to ADR-010, which explains the reasoning. The standard is the rule; the
-   ADR is the rationale.
+   `CODING_STANDARDS.md`. A standard like "never truncate LLM responses"
+   traces back to the ADR that explains the reasoning. The standard is the
+   rule; the ADR is the rationale.
 
 ## When to write an ADR
 
 Write one when:
 
 - You are choosing between multiple viable approaches and the choice has
-  lasting consequences (runtime architecture, persistence strategy, protocol
-  design).
+  lasting consequences (proxy architecture, protocol bridging strategy,
+  session management model).
 - You are establishing a convention that all future code must follow
   (logging policy, error handling pattern, test structure).
 - You are deliberately *not* doing something that a reasonable person might
-  expect (e.g., not using an ORM, not supporting mailbox replay on resume).
+  expect (e.g., not calling the Copilot backend API directly, not spawning
+  multiple server processes for concurrency).
 - You are reversing or significantly amending a prior decision.
 
 Do **not** write an ADR for:
@@ -58,7 +112,7 @@ Every ADR in this project follows the same skeleton:
 
 **Status:** Accepted | Superseded by ADR-XXX
 **Date:** YYYY-MM-DD
-**Relates to:** MG-ticket (if applicable)
+**Relates to:** PROJ-ticket (if applicable)
 **Related ADRs:** [ADR-XXX](xxx-filename.md), ...
 
 ## Context
@@ -87,10 +141,9 @@ that prevents re-litigation. Be honest about tradeoffs, not dismissive.
 Optional additions:
 
 - **Revision History** table at the end, for decisions that evolve after
-  acceptance (see ADR-036 for an example).
+  acceptance.
 - **Non-goals** section when it is important to explicitly fence scope.
-- **File-path impact inventory** when the decision touches many modules
-  (see ADR-027).
+- **File-path impact inventory** when the decision touches many modules.
 
 ## Conventions in this project
 
@@ -102,9 +155,9 @@ directory before creating a new one.
 
 ### Index
 
-`000-index.md` is the table of contents, organized by domain (core runtime,
-memory, validation, etc.). Every new ADR must be added to the index under the
-appropriate section.
+`000-index.md` is the table of contents, organized by domain (proxy
+architecture, session management, testing, etc.). Every new ADR must be
+added to the index under the appropriate section.
 
 ### Status lifecycle
 
@@ -126,17 +179,16 @@ The standard is the quick-reference rule; the ADR is the full reasoning.
 
 ### Relationship to Jira
 
-If an ADR relates to a Jira ticket (e.g., it was written as part of
-implementing MG-87), include the ticket key in the **Relates to** field.
-This creates a bidirectional trace: the ticket links to the code change,
-and the ADR links to the ticket that motivated it.
+If an ADR relates to a Jira ticket, include the ticket key in the
+**Relates to** field. This creates a bidirectional trace: the ticket links
+to the code change, and the ADR links to the ticket that motivated it.
 
 ## How to write a good ADR
 
 1. **Be specific, not abstract.** Name the modules, the failure modes, the
-   measurements. "This was slow" is weak. "ValidationActor subprocess
-   spawned unbounded recursion because `os.environ` propagates
-   `APP_DATA`" is strong.
+   measurements. "This was slow" is weak. "`find_binary()` grabbed an
+   incompatible `copilot-language-server` from `ps` output because multiple
+   IDE instances were running" is strong.
 
 2. **Record what you rejected and why.** The rejected-alternatives section
    is often the most valuable part. Future readers will have the same ideas
