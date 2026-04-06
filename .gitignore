@@ -4,8 +4,6 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
-docs/journal.md
 ./logs/
 experiments/*/logs/
-tmp/
 .DS_Store
