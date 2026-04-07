@@ -8,8 +8,11 @@ from unittest.mock import patch
 
 from acp_proxy.discovery import (
     _compatible_path_pattern,
+    _compatible_suffix,
+    _filter_process_paths,
     _is_compatible_path,
     _platform_config,
+    _user_home,
     find_binary,
     find_binary_from_jetbrains,
     find_binary_from_processes,
@@ -23,7 +26,7 @@ def _make_path(*segments: str) -> str:
 
 
 class TestIsCompatiblePath:
-    """_is_compatible_path accepts only the exact IntelliJ 2025.3 binary location."""
+    """_is_compatible_path accepts only IntelliJ 2025.3 binaries under the current user's home."""
 
     def test_correct_path_matches(self):
         """The exact expected path is accepted."""
@@ -77,16 +80,61 @@ class TestIsCompatiblePath:
         expected = _compatible_path_pattern()
         assert not _is_compatible_path(expected + "/extra")
 
+    def test_other_user_rejected(self):
+        """A valid IntelliJ 2025.3 path under a different user's home is rejected."""
+        cfg = _platform_config()
+        suffix = _compatible_suffix()
+        # Construct a path under a fake user's home
+        other_home = (
+            "/Users/otheruser"
+            if platform.system() != "Windows"
+            else "C:\\Users\\otheruser"
+        )
+        bad = os.path.join(
+            other_home,
+            "Library/Application Support/JetBrains",
+            suffix,
+        )
+        assert not _is_compatible_path(bad)
+
+    def test_home_directory_is_prefix_not_substring(self):
+        """The home directory check uses a prefix match, not a substring match.
+
+        A path like /Users/jonathanmiddleton2/... should not match if the
+        current user is jonathanmiddleton.
+        """
+        expected = _compatible_path_pattern()
+        home = _user_home()
+        # Extend the username portion to create a near-miss path
+        bad = expected.replace(home, home + "2")
+        assert not _is_compatible_path(bad)
+
+
+class TestCompatibleSuffix:
+    """_compatible_suffix returns the IDE-and-below portion of the path."""
+
+    def test_suffix_starts_with_ide_dir(self):
+        suffix = _compatible_suffix()
+        assert suffix.startswith("IntelliJIdea2025.3")
+
+    def test_suffix_ends_with_binary_name(self):
+        cfg = _platform_config()
+        suffix = _compatible_suffix()
+        assert suffix.endswith(cfg["binary_name"])
+
+    def test_suffix_is_subset_of_full_path(self):
+        full = _compatible_path_pattern()
+        suffix = _compatible_suffix()
+        assert full.endswith(suffix)
+
 
 class TestPlatformConfig:
     """_platform_config returns sane values for the current platform."""
 
     def test_config_has_required_keys(self):
         cfg = _platform_config()
-        assert "base" in cfg
-        assert "arch" in cfg
-        assert "binary_name" in cfg
-        assert "ide_dir" in cfg
+        for key in ("base", "arch", "binary_name", "ide_dir", "home"):
+            assert key in cfg
 
     def test_ide_dir_is_intellij_2025_3(self):
         cfg = _platform_config()
@@ -99,9 +147,68 @@ class TestPlatformConfig:
         else:
             assert not cfg["binary_name"].endswith(".exe")
 
+    def test_home_matches_expanduser(self):
+        cfg = _platform_config()
+        assert cfg["home"] == os.path.expanduser("~")
+
+
+class TestFilterProcessPaths:
+    """_filter_process_paths applies compatibility filtering to process output."""
+
+    def test_compatible_path_accepted(self):
+        expected = _compatible_path_pattern()
+        lines = [f"{expected} --acp --stdio"]
+        result = _filter_process_paths(lines, separator=" --")
+        assert result == expected
+
+    def test_incompatible_path_rejected(self):
+        bad = _compatible_path_pattern().replace("IntelliJIdea2025.3", "PyCharm2025.3")
+        lines = [f"{bad} --acp --stdio"]
+        result = _filter_process_paths(lines, separator=" --")
+        assert result is None
+
+    def test_no_separator_uses_full_line(self):
+        """When separator is None, the full line is used as the path (Windows style)."""
+        expected = _compatible_path_pattern()
+        lines = [f"  {expected}  "]
+        result = _filter_process_paths(lines, separator=None)
+        assert result == expected
+
+    def test_grep_lines_filtered(self):
+        expected = _compatible_path_pattern()
+        lines = [
+            "grep copilot-language-server",
+            f"{expected} --acp --stdio",
+        ]
+        result = _filter_process_paths(lines, separator=" --")
+        assert result == expected
+
+    def test_duplicates_deduplicated(self):
+        expected = _compatible_path_pattern()
+        lines = [
+            f"{expected} --acp --stdio",
+            f"{expected} --acp --stdio --other",
+        ]
+        result = _filter_process_paths(lines, separator=" --")
+        assert result == expected
+
+    def test_empty_lines_ignored(self):
+        result = _filter_process_paths(["", "  ", "\n"], separator=" --")
+        assert result is None
+
+    def test_mixed_compatible_and_incompatible(self):
+        expected = _compatible_path_pattern()
+        bad = expected.replace("IntelliJIdea2025.3", "PyCharm2025.3")
+        lines = [
+            f"{bad} --acp --stdio",
+            f"{expected} --acp --stdio",
+        ]
+        result = _filter_process_paths(lines, separator=" --")
+        assert result == expected
+
 
 class TestFindBinaryFromProcesses:
-    """Process-based discovery (ADR-006): only compatible binaries accepted."""
+    """Process-based discovery dispatches to the correct platform implementation."""
 
     def _expected_path(self) -> str:
         return _compatible_path_pattern()
@@ -165,12 +272,108 @@ class TestFindBinaryFromProcesses:
         assert result == expected
 
 
+class TestWindowsProcessDiscovery:
+    """Windows-specific process discovery using PowerShell and wmic.
+
+    These tests patch platform.system to "Windows" which changes the
+    platform config (arch, binary name, base path).  The expected path
+    must be constructed under the patched config to match correctly.
+    """
+
+    def _windows_expected(self) -> str:
+        """Construct the expected path as _compatible_path_pattern would on Windows."""
+        home = os.path.expanduser("~")
+        appdata = os.environ.get("APPDATA", os.path.join(home, "AppData", "Roaming"))
+        return os.path.join(
+            appdata,
+            "JetBrains",
+            "IntelliJIdea2025.3",
+            "plugins",
+            "github-copilot-intellij",
+            "copilot-agent",
+            "native",
+            "win32-x64",
+            "copilot-language-server.exe",
+        )
+
+    def test_powershell_discovery(self):
+        """PowerShell output is parsed and filtered correctly."""
+        expected = self._windows_expected()
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "acp_proxy.discovery._query_processes_powershell",
+                return_value=[expected],
+            ),
+        ):
+            result = find_binary_from_processes()
+        assert result == expected
+
+    def test_powershell_fails_falls_back_to_wmic(self):
+        """When PowerShell fails, wmic is tried."""
+        expected = self._windows_expected()
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "acp_proxy.discovery._query_processes_powershell",
+                return_value=None,
+            ),
+            patch(
+                "acp_proxy.discovery._query_processes_wmic",
+                return_value=[expected],
+            ),
+        ):
+            result = find_binary_from_processes()
+        assert result == expected
+
+    def test_both_methods_fail_returns_none(self):
+        """When both PowerShell and wmic fail, returns None."""
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "acp_proxy.discovery._query_processes_powershell",
+                return_value=None,
+            ),
+            patch(
+                "acp_proxy.discovery._query_processes_wmic",
+                return_value=None,
+            ),
+        ):
+            result = find_binary_from_processes()
+        assert result is None
+
+    def test_incompatible_path_rejected_on_windows(self):
+        """A PyCharm binary from Windows process listing is rejected."""
+        bad = self._windows_expected().replace("IntelliJIdea2025.3", "PyCharm2025.1")
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "acp_proxy.discovery._query_processes_powershell",
+                return_value=[bad],
+            ),
+        ):
+            result = find_binary_from_processes()
+        assert result is None
+
+    def test_incompatible_path_rejected_on_windows(self):
+        """A PyCharm binary from Windows process listing is rejected."""
+        bad = _compatible_path_pattern().replace("IntelliJIdea2025.3", "PyCharm2025.1")
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "acp_proxy.discovery._query_processes_powershell",
+                return_value=[bad],
+            ),
+        ):
+            result = find_binary_from_processes()
+        assert result is None
+
+
 class TestFindBinaryFromJetbrains:
     """Filesystem-based discovery (ADR-006): checks expected path on disk."""
 
     def test_binary_exists_and_executable(self, tmp_path):
         """Returns path when binary exists and is executable."""
-        expected = _compatible_path_pattern()
         with (
             patch(
                 "acp_proxy.discovery._compatible_path_pattern",

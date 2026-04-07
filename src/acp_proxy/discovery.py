@@ -9,7 +9,6 @@ the ACP protocol surface this proxy requires.
 Supported platforms:
 - macOS (Darwin): binary at ~/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/...
 - Windows: binary at %APPDATA%/JetBrains/IntelliJIdea2025.3/plugins/... (roaming profile)
-  NOTE: Windows path is provisional — needs verification on the target environment.
 
 This module is the single source of truth for binary resolution. Both the
 CLI entry point and the test suite import from here.
@@ -17,14 +16,15 @@ CLI entry point and the test suite import from here.
 
 from __future__ import annotations
 
-import glob
 import logging
 import os
 import platform
-import re
 import subprocess
 
 logger = logging.getLogger(__name__)
+
+# The IDE directory name that identifies the only compatible IntelliJ version.
+_IDE_DIR = "IntelliJIdea2025.3"
 
 _PLUGIN_SUFFIX_PARTS = (
     "plugins",
@@ -39,36 +39,38 @@ _PLUGIN_SUFFIX_PARTS = (
 def _platform_config() -> dict[str, str]:
     """Return platform-specific discovery configuration.
 
-    Returns a dict with keys: base, arch, binary_name, ide_dir.
+    Returns a dict with keys: base, arch, binary_name, ide_dir, home.
     """
     system = platform.system()
     home = os.path.expanduser("~")
 
     if system == "Darwin":
         return {
+            "home": home,
             "base": os.path.join(home, "Library/Application Support/JetBrains"),
             "arch": "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64",
             "binary_name": "copilot-language-server",
-            "ide_dir": "IntelliJIdea2025.3",
+            "ide_dir": _IDE_DIR,
         }
     elif system == "Windows":
         # Windows uses %APPDATA% (roaming profile) for JetBrains config.
-        # NOTE: This path is provisional and needs verification on the
-        # actual target environment. The binary is an .exe on Windows.
-        appdata = os.environ.get("APPDATA", os.path.join(home, "AppData/Roaming"))
+        # The binary is an .exe on Windows.
+        appdata = os.environ.get("APPDATA", os.path.join(home, "AppData", "Roaming"))
         return {
+            "home": home,
             "base": os.path.join(appdata, "JetBrains"),
             "arch": "win32-x64",
             "binary_name": "copilot-language-server.exe",
-            "ide_dir": "IntelliJIdea2025.3",
+            "ide_dir": _IDE_DIR,
         }
     else:
         # Linux — included for completeness but not a current target
         return {
+            "home": home,
             "base": os.path.join(home, ".local/share/JetBrains"),
             "arch": "linux-x64",
             "binary_name": "copilot-language-server",
-            "ide_dir": "IntelliJIdea2025.3",
+            "ide_dir": _IDE_DIR,
         }
 
 
@@ -82,25 +84,50 @@ def _compatible_path_pattern() -> str:
     return os.path.join(cfg["base"], cfg["ide_dir"], *suffix_parts)
 
 
-def _compatible_regex() -> re.Pattern[str]:
-    """Compile a regex that matches the compatible binary path.
+def _compatible_suffix() -> str:
+    """Return the path suffix from the IDE directory onward.
 
-    The path is fully fixed — there is exactly one valid location per
-    platform per user.  The user's home directory is included so that
-    binaries from other users' processes (visible in ``ps``) are rejected.
+    This is the portion that identifies a compatible binary regardless of
+    where the user's home directory is located. Used together with a home
+    directory check to validate paths from process listings.
     """
-    pattern = _compatible_path_pattern()
-    return re.compile(re.escape(pattern))
+    cfg = _platform_config()
+    suffix_parts = [
+        p.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
+        for p in _PLUGIN_SUFFIX_PARTS
+    ]
+    return os.path.join(cfg["ide_dir"], *suffix_parts)
+
+
+def _user_home() -> str:
+    """Return the current user's home directory, normalized."""
+    return os.path.normpath(os.path.expanduser("~"))
 
 
 def _is_compatible_path(binary_path: str) -> bool:
-    """Check whether a binary path matches the compatible IntelliJ 2025.3 pattern.
+    """Check whether a binary path is a compatible IntelliJ 2025.3 binary.
 
-    The match is exact: correct user home, correct IDE version, correct
-    plugin structure.  Binaries from other users, other JetBrains IDEs
-    (PyCharm, etc.), or other IntelliJ versions are all rejected.
+    Two conditions must hold:
+    1. The path is under the current user's home directory.
+    2. The path ends with the expected IDE version, plugin structure,
+       architecture, and binary name.
+
+    This rejects binaries from other users, other JetBrains IDEs (PyCharm,
+    etc.), other IntelliJ versions, and standalone installs.
     """
-    return _compatible_regex().fullmatch(binary_path) is not None
+    normalized = os.path.normpath(binary_path)
+    home = _user_home()
+    suffix = os.path.normpath(_compatible_suffix())
+
+    # Must be under the current user's home
+    if not normalized.startswith(home + os.sep):
+        return False
+
+    # Must end with the expected IDE + plugin suffix
+    if not normalized.endswith(suffix):
+        return False
+
+    return True
 
 
 def find_binary_from_jetbrains() -> str | None:
@@ -117,21 +144,13 @@ def find_binary_from_jetbrains() -> str | None:
     return None
 
 
-def find_binary_from_processes() -> str | None:
-    """Find a compatible binary from running processes.
+def _find_binary_from_processes_unix() -> str | None:
+    """Find a compatible binary from running processes on Unix (macOS/Linux).
 
     Scans ``ps`` output for copilot-language-server processes, but only
     accepts those whose resolved path matches the IntelliJ 2025.3 plugin
-    location. Incompatible binaries (other JetBrains versions, standalone
-    installs, npm global, etc.) are explicitly rejected.
-
-    Only available on Unix-like systems (macOS, Linux). On Windows, returns
-    None — process-based discovery is not yet implemented there.
+    location under the current user's home.
     """
-    if platform.system() == "Windows":
-        logger.debug("Process-based discovery not implemented on Windows")
-        return None
-
     try:
         out = subprocess.check_output(
             ["ps", "-eo", "command"], text=True, stderr=subprocess.DEVNULL
@@ -140,14 +159,117 @@ def find_binary_from_processes() -> str | None:
         logger.debug("Failed to run ps")
         return None
 
+    return _filter_process_paths(out.splitlines(), separator=" --")
+
+
+def _find_binary_from_processes_windows() -> str | None:
+    """Find a compatible binary from running processes on Windows.
+
+    Uses PowerShell to list processes named copilot-language-server and
+    extract their executable paths. Falls back to wmic if PowerShell is
+    unavailable.
+    """
+    binary_name = _platform_config()["binary_name"]
+    # Strip .exe for the process name filter
+    proc_name = binary_name.removesuffix(".exe")
+
+    # Try PowerShell first — available on all modern Windows
+    lines = _query_processes_powershell(proc_name)
+    if lines is None:
+        # Fall back to wmic (deprecated but widely available)
+        lines = _query_processes_wmic(binary_name)
+    if lines is None:
+        return None
+
+    return _filter_process_paths(lines, separator=None)
+
+
+def _query_processes_powershell(proc_name: str) -> list[str] | None:
+    """Query running processes via PowerShell, returning executable paths."""
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        (
+            f"Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue "
+            f"| Select-Object -ExpandProperty Path"
+        ),
+    ]
+    try:
+        out = subprocess.check_output(
+            cmd, text=True, stderr=subprocess.DEVNULL, timeout=10
+        )
+        lines = [line.strip() for line in out.splitlines() if line.strip()]
+        if lines:
+            logger.debug("PowerShell found %d process path(s)", len(lines))
+            return lines
+        return None
+    except Exception as e:
+        logger.debug("PowerShell process query failed: %s", e)
+        return None
+
+
+def _query_processes_wmic(binary_name: str) -> list[str] | None:
+    """Query running processes via wmic, returning executable paths."""
+    cmd = [
+        "wmic",
+        "process",
+        "where",
+        f"name='{binary_name}'",
+        "get",
+        "ExecutablePath",
+        "/value",
+    ]
+    try:
+        out = subprocess.check_output(
+            cmd, text=True, stderr=subprocess.DEVNULL, timeout=10
+        )
+        lines = []
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("ExecutablePath="):
+                path = line.split("=", 1)[1].strip()
+                if path:
+                    lines.append(path)
+        if lines:
+            logger.debug("wmic found %d process path(s)", len(lines))
+            return lines
+        return None
+    except Exception as e:
+        logger.debug("wmic process query failed: %s", e)
+        return None
+
+
+def _filter_process_paths(lines: list[str], separator: str | None) -> str | None:
+    """Filter process listing lines to find a compatible binary path.
+
+    Args:
+        lines: Output lines from ps, PowerShell, or wmic.
+        separator: If set, each line is split on this string and the first
+            part is taken as the binary path (used for Unix ``ps`` output
+            where flags follow the path). If None, the entire stripped line
+            is treated as the path (used for Windows output).
+    """
+    cfg = _platform_config()
+    binary_name = cfg["binary_name"]
+
     candidates: list[str] = []
     rejected: list[str] = []
 
-    for line in out.splitlines():
-        if "copilot-language-server" not in line or "grep" in line:
+    for line in lines:
+        if binary_name not in line and "copilot-language-server" not in line:
             continue
-        # Extract the binary path (everything before the first --flag)
-        binary_path = line.split(" --")[0].strip()
+        if "grep" in line:
+            continue
+
+        if separator is not None:
+            binary_path = line.split(separator)[0].strip()
+        else:
+            binary_path = line.strip()
+
+        if not binary_path:
+            continue
+
         if _is_compatible_path(binary_path):
             candidates.append(binary_path)
         else:
@@ -155,22 +277,38 @@ def find_binary_from_processes() -> str | None:
 
     if rejected:
         logger.warning(
-            "Rejected incompatible copilot-language-server binaries from ps: %s",
+            "Rejected incompatible copilot-language-server binaries: %s",
             rejected,
         )
 
     if candidates:
-        # Deduplicate (same binary may appear in multiple ps lines)
+        # Deduplicate (same binary may appear in multiple lines)
         seen: set[str] = set()
         unique = []
         for c in candidates:
-            if c not in seen:
-                seen.add(c)
+            normalized = os.path.normpath(c)
+            if normalized not in seen:
+                seen.add(normalized)
                 unique.append(c)
-        logger.info("Found compatible binary from ps: %s", unique[0])
+        logger.info("Found compatible binary from processes: %s", unique[0])
         return unique[0]
 
     return None
+
+
+def find_binary_from_processes() -> str | None:
+    """Find a compatible binary from running processes.
+
+    Dispatches to the platform-specific implementation:
+    - Unix (macOS, Linux): scans ``ps`` output
+    - Windows: uses PowerShell (preferred) or wmic (fallback)
+
+    Only accepts binaries whose path is under the current user's home
+    directory and matches the IntelliJ 2025.3 plugin structure.
+    """
+    if platform.system() == "Windows":
+        return _find_binary_from_processes_windows()
+    return _find_binary_from_processes_unix()
 
 
 def find_binary() -> str | None:
