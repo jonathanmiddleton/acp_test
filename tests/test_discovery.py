@@ -26,15 +26,29 @@ def _make_path(*segments: str) -> str:
 
 
 class TestIsCompatiblePath:
-    """_is_compatible_path accepts only IntelliJ 2025.3 binaries under the current user's home."""
+    """_is_compatible_path checks: under home, contains IntelliJIdea2025.3, correct binary name."""
 
     def test_correct_path_matches(self):
         """The exact expected path is accepted."""
         expected = _compatible_path_pattern()
         assert _is_compatible_path(expected)
 
+    def test_alternative_directory_structure_accepted(self):
+        """A path with different intermediate dirs but correct home/IDE/binary is accepted."""
+        cfg = _platform_config()
+        alt = _make_path(
+            "some",
+            "other",
+            "layout",
+            "IntelliJIdea2025.3",
+            "whatever",
+            "path",
+            cfg["binary_name"],
+        )
+        assert _is_compatible_path(alt)
+
     def test_pycharm_rejected(self):
-        """A PyCharm binary is not compatible."""
+        """A PyCharm binary is not compatible — wrong IDE directory."""
         cfg = _platform_config()
         bad = _make_path(
             "Library/Application Support/JetBrains",
@@ -58,33 +72,42 @@ class TestIsCompatiblePath:
         assert not _is_compatible_path(bad)
 
     def test_homebrew_path_rejected(self):
-        """A standalone/homebrew install is not compatible."""
+        """A standalone/homebrew install is not compatible — no IntelliJIdea2025.3."""
         assert not _is_compatible_path("/usr/local/bin/copilot-language-server")
 
     def test_npm_global_path_rejected(self):
-        """An npm global install is not compatible."""
+        """An npm global install is not compatible — no IntelliJIdea2025.3."""
         bad = _make_path(".npm-global/bin/copilot-language-server")
         assert not _is_compatible_path(bad)
 
     def test_empty_string_rejected(self):
         assert not _is_compatible_path("")
 
-    def test_partial_path_rejected(self):
-        """A partial path that contains the right directory names but is incomplete."""
-        assert not _is_compatible_path(
-            "IntelliJIdea2025.3/plugins/copilot-language-server"
+    def test_not_under_home_rejected(self):
+        """A path with correct IDE dir and binary but outside home is rejected."""
+        cfg = _platform_config()
+        bad = os.path.join(
+            "/opt",
+            "JetBrains",
+            "IntelliJIdea2025.3",
+            "plugins",
+            "github-copilot-intellij",
+            cfg["binary_name"],
         )
+        assert not _is_compatible_path(bad)
 
-    def test_path_with_extra_suffix_rejected(self):
-        """A path that extends beyond the expected binary location."""
-        expected = _compatible_path_pattern()
-        assert not _is_compatible_path(expected + "/extra")
+    def test_wrong_binary_name_rejected(self):
+        """A path under home with correct IDE but wrong binary name is rejected."""
+        bad = _make_path(
+            "Library/Application Support/JetBrains",
+            "IntelliJIdea2025.3",
+            "plugins/something-else",
+        )
+        assert not _is_compatible_path(bad)
 
     def test_other_user_rejected(self):
         """A valid IntelliJ 2025.3 path under a different user's home is rejected."""
         cfg = _platform_config()
-        suffix = _compatible_suffix()
-        # Construct a path under a fake user's home
         other_home = (
             "/Users/otheruser"
             if platform.system() != "Windows"
@@ -93,20 +116,28 @@ class TestIsCompatiblePath:
         bad = os.path.join(
             other_home,
             "Library/Application Support/JetBrains",
-            suffix,
+            "IntelliJIdea2025.3",
+            "plugins/github-copilot-intellij/copilot-agent/native",
+            cfg["arch"],
+            cfg["binary_name"],
         )
         assert not _is_compatible_path(bad)
 
     def test_home_directory_is_prefix_not_substring(self):
-        """The home directory check uses a prefix match, not a substring match.
-
-        A path like /Users/jonathanmiddleton2/... should not match if the
-        current user is jonathanmiddleton.
-        """
+        """The home directory check uses a prefix match, not a substring match."""
         expected = _compatible_path_pattern()
         home = _user_home()
-        # Extend the username portion to create a near-miss path
         bad = expected.replace(home, home + "2")
+        assert not _is_compatible_path(bad)
+
+    def test_ide_dir_as_substring_rejected(self):
+        """IntelliJIdea2025.3 must be a path component, not a substring."""
+        cfg = _platform_config()
+        bad = _make_path(
+            "Library/Application Support/JetBrains",
+            "NotIntelliJIdea2025.3Here",
+            cfg["binary_name"],
+        )
         assert not _is_compatible_path(bad)
 
 
