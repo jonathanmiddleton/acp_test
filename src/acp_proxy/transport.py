@@ -176,6 +176,9 @@ class AcpTransport:
             future = self._pending.pop(req_id, None)
             if future and not future.done():
                 if "error" in msg:
+                    logger.debug(
+                        "Error response for request %s: %s", req_id, msg["error"]
+                    )
                     future.set_exception(
                         AcpError(
                             msg["error"].get("message", "Unknown error"), msg["error"]

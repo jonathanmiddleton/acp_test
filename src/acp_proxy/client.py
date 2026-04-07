@@ -104,10 +104,19 @@ class AcpClient:
         Returns the session ID. If model_id is provided, the model is
         set after session creation.
         """
-        result = await self._transport.send_request(
-            "session/new",
-            {"cwd": cwd, "mcpServers": []},
-        )
+        params = {"cwd": cwd, "mcpServers": []}
+        logger.debug("session/new request params: %s", params)
+        try:
+            result = await self._transport.send_request("session/new", params)
+        except AcpError as e:
+            logger.error(
+                "session/new failed: %s | full error: %s | cwd: %s",
+                e,
+                e.error_obj,
+                cwd,
+            )
+            raise
+        logger.debug("session/new response: %s", result)
         session_id = result["sessionId"]
 
         # Extract models from session response if present
@@ -204,6 +213,7 @@ class AcpClient:
                 },
             },
         )
+        logger.debug("initialize response: %s", result)
         info = result.get("agentInfo", {})
         self._agent_name = info.get("name")
         self._agent_version = info.get("version")
@@ -213,6 +223,13 @@ class AcpClient:
             self._agent_version,
             result.get("protocolVersion"),
         )
+        # Log capabilities for debugging environment differences
+        caps = result.get("capabilities", {})
+        if caps:
+            logger.debug("Server capabilities: %s", caps)
+        auth = result.get("authMethods", result.get("signin", {}))
+        if auth:
+            logger.debug("Auth methods: %s", auth)
 
     def _extract_models(self, models_data: dict[str, Any]) -> None:
         """Extract available models from a session/new response."""

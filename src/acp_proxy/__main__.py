@@ -24,6 +24,7 @@ import asyncio
 import logging
 import logging.handlers
 import os
+import platform
 import signal
 import sys
 
@@ -196,6 +197,8 @@ def main() -> None:
         )
 
     logger.info("Using binary: %s", binary)
+    logger.info("Working directory (cwd): %s", args.cwd)
+    logger.info("Platform: %s", platform.system())
 
     asyncio.run(run(binary, args.port, args.cwd, system_prompt=system_prompt))
 
