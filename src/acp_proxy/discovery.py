@@ -107,24 +107,31 @@ def _user_home() -> str:
 def _is_compatible_path(binary_path: str) -> bool:
     """Check whether a binary path is a compatible IntelliJ 2025.3 binary.
 
-    Two conditions must hold:
+    Three conditions must hold:
     1. The path is under the current user's home directory.
-    2. The path ends with the expected IDE version, plugin structure,
-       architecture, and binary name.
+    2. The path contains ``IntelliJIdea2025.3`` as a path component.
+    3. The binary filename is the expected platform-specific name
+       (``copilot-language-server`` or ``copilot-language-server.exe``).
 
-    This rejects binaries from other users, other JetBrains IDEs (PyCharm,
-    etc.), other IntelliJ versions, and standalone installs.
+    We do not assume anything else about the intermediate directory
+    structure — deployment paths vary across environments, and the
+    plugin layout may differ between IDE versions or install methods.
     """
     normalized = os.path.normpath(binary_path)
     home = _user_home()
-    suffix = os.path.normpath(_compatible_suffix())
+    cfg = _platform_config()
 
     # Must be under the current user's home
     if not normalized.startswith(home + os.sep):
         return False
 
-    # Must end with the expected IDE + plugin suffix
-    if not normalized.endswith(suffix):
+    # Must contain IntelliJIdea2025.3 as a path component
+    parts = normalized.split(os.sep)
+    if _IDE_DIR not in parts:
+        return False
+
+    # Must end with the correct binary name
+    if os.path.basename(normalized) != cfg["binary_name"]:
         return False
 
     return True
