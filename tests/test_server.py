@@ -391,6 +391,97 @@ async def test_session_reuse_per_conversation(client, fake_client):
     assert fake_client._session_counter == 3
 
 
+@pytest.mark.asyncio
+async def test_identical_single_message_gets_new_session(client, fake_client):
+    """Repeated single-message requests with the same prompt get separate sessions.
+
+    This prevents scripts and agents that send a static prompt from colliding
+    into one ACP session.  Each single-message request after the first creates
+    a fresh session because the prior session is already active.
+    """
+    # First invocation — creates session 1
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "run the tests"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 1
+
+    # Second invocation — same prompt, single message, session 1 is active
+    # → must create session 2
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "run the tests"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 2
+
+    # Third invocation — same again → session 3
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "run the tests"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 3
+
+
+@pytest.mark.asyncio
+async def test_multi_turn_reuses_session_after_collision(client, fake_client):
+    """A multi-turn continuation reuses the session even after a single-message
+    request evicted the previous key holder.
+
+    Sequence:
+    1. Single-message "hello" → session 1
+    2. Single-message "hello" → session 2 (collision avoidance)
+    3. Multi-turn with first_msg "hello" → reuses session 2 (continuation)
+    """
+    # Turn 1: first conversation
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 1
+
+    # Turn 1 of second conversation: same prompt → new session
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 2
+
+    # Turn 2 of second conversation: multi-message continuation → reuses session 2
+    await client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gpt-4.1",
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi there"},
+                {"role": "user", "content": "follow up"},
+            ],
+            "stream": False,
+        },
+    )
+    assert fake_client._session_counter == 2
+
+
 # ---------------------------------------------------------------------------
 # _map_stop_reason
 # ---------------------------------------------------------------------------

@@ -17,29 +17,29 @@ output (2752 chars / 688 tokens every time).
 **Token throughput scaling curve (local, multi-run averages, gpt-4.1, 688-token response):**
 
 | Sessions | Per-prompt tok/s | Aggregate tok/s | Mean latency (s) |
-|---------:|:----------------:|:---------------:|:-----------------:|
-| 1        | 170              | 170             | 4.2               |
-| 2        | 169              | 307             | 4.1               |
-| 4        | 152              | 509             | 4.7               |
-| 8        | 118              | 580             | 6.2               |
-| 12       | 119              | 1272            | 5.8               |
-| 16       | 113              | 1320            | 6.2               |
-| 20       | 110              | 1655            | 6.4               |
-| 24       | 97               | 1988            | 7.1               |
-| 32       | 81               | 2041            | 8.6               |
+|---------:|:----------------:|:---------------:|:----------------:|
+|        1 |       170        |       170       |       4.2        |
+|        2 |       169        |       307       |       4.1        |
+|        4 |       152        |       509       |       4.7        |
+|        8 |       118        |       580       |       6.2        |
+|       12 |       119        |      1272       |       5.8        |
+|       16 |       113        |      1320       |       6.2        |
+|       20 |       110        |      1655       |       6.4        |
+|       24 |        97        |      1988       |       7.1        |
+|       32 |        81        |      2041       |       8.6        |
 
 **Target environment scaling (gpt-4.1 + gpt-4o mixed, single runs):**
 
 | Sessions | Wall time (s) | Throughput (p/s) | Est. agg tok/s |
 |---------:|:-------------:|:----------------:|:--------------:|
-| 1        | ~10.0         | 0.10             | 69             |
-| 8        | ~11.6         | 0.69             | 475            |
-| 16       | ~12.0         | 1.33             | 915            |
-| 24       | ~13.3         | 1.80             | 1238           |
-| 32       | 13.54         | 2.36             | 1624           |
-| 40       | 13.95         | 2.87             | 1975           |
-| 48       | 13.98         | 3.43             | 2360           |
-| 64       | 14.36         | 4.46             | 3069           |
+|        1 |     ~10.0     |       0.10       |       69       |
+|        8 |     ~11.6     |       0.69       |      475       |
+|       16 |     ~12.0     |       1.33       |      915       |
+|       24 |     ~13.3     |       1.80       |      1238      |
+|       32 |     13.54     |       2.36       |      1624      |
+|       40 |     13.95     |       2.87       |      1975      |
+|       48 |     13.98     |       3.43       |      2360      |
+|       64 |     14.36     |       4.46       |      3069      |
 
 1 token ~ 4 characters. Per-prompt tok/s is the per-agent experience (how
 fast each agent sees its response generated). Aggregate tok/s is total token
@@ -56,13 +56,13 @@ production but degrades each individual agent's generation rate.
 
 | Sessions | Wall time (s) | Throughput (p/s) | Efficiency |
 |---------:|:-------------:|:----------------:|:----------:|
-| 1 (seq)  | 1.49          | 0.67             | baseline   |
-| 1        | 0.85          | 1.18             | —          |
-| 2        | 1.03          | 1.95             | 145%       |
-| 4        | 1.36          | 3.01             | 112%       |
-| 8        | 2.37          | 3.41             | 64%        |
-| 12       | 2.83          | 4.26             | 53%        |
-| 16       | 3.82          | 4.35             | 41%        |
+|  1 (seq) |     1.49      |       0.67       |  baseline  |
+|        1 |     0.85      |       1.18       |     —      |
+|        2 |     1.03      |       1.95       |    145%    |
+|        4 |     1.36      |       3.01       |    112%    |
+|        8 |     2.37      |       3.41       |    64%     |
+|       12 |     2.83      |       4.26       |    53%     |
+|       16 |     3.82      |       4.35       |    41%     |
 
 The bottleneck is the Copilot backend, not the local process. The language
 server is a thin async relay — all sessions multiplex over a single upstream
@@ -76,11 +76,11 @@ regardless of whether the other sessions use the same model or a different one:
 
 | Total sessions | gpt-4.1 solo (tok/s) | gpt-4.1 mixed (tok/s) | Delta |
 |---------------:|:--------------------:|:---------------------:|:-----:|
-| 2              | 169                  | 165                   | -3%   |
-| 4              | 152                  | 161                   | +6%   |
-| 8              | 118                  | 122                   | +4%   |
-| 12             | 119                  | 118                   | -1%   |
-| 16             | 113                  | 114                   | +1%   |
+|              2 |         169          |          165          |  -3%  |
+|              4 |         152          |          161          |  +6%  |
+|              8 |         118          |          122          |  +4%  |
+|             12 |         119          |          118          |  -1%  |
+|             16 |         113          |          114          |  +1%  |
 
 All deltas are within noise. Mixing models does not unlock additional
 throughput — all models share the same backend rate limit budget. This rules
@@ -111,12 +111,12 @@ Multiple copilot-language-server processes can run simultaneously with
 independent auth tokens (auto-discovered from `~/.config/github-copilot/`).
 Each manages its own sessions. No interference observed.
 
-| Configuration        | Wall time (s) | Throughput (prompts/s) |
-|---------------------:|:-------------:|:----------------------:|
-| 2 proc x 1 session   | ~0.95         | ~2.1                   |
-| 4 proc x 1 session   | ~1.1-1.6      | ~2.5-3.7               |
-| 2 proc x 2 sessions  | ~1.7          | ~2.3                   |
-| 4 proc x 2 sessions  | ~2.0-2.5      | ~3.2-4.1               |
+|       Configuration | Wall time (s) | Throughput (prompts/s) |
+|--------------------:|:-------------:|:----------------------:|
+|  2 proc x 1 session |     ~0.95     |          ~2.1          |
+|  4 proc x 1 session |   ~1.1-1.6    |        ~2.5-3.7        |
+| 2 proc x 2 sessions |     ~1.7      |          ~2.3          |
+| 4 proc x 2 sessions |   ~2.0-2.5    |        ~3.2-4.1        |
 
 Inter-process scaling is comparable to intra-process scaling. This makes sense:
 the bottleneck is the Copilot backend API, not the local process. Spinning up
@@ -126,12 +126,12 @@ on one process already achieve.
 
 ### 5. Session creation is slow, prompting is fast
 
-| Operation          | Latency     |
-|-------------------:|:-----------:|
-| Process start + init | ~2-3s     |
-| Session creation   | ~1.5-2.5s   |
-| Warmup prompt      | ~1.7-2.7s   |
-| Subsequent prompt  | ~0.9-2.0s   |
+|            Operation |  Latency   |
+|---------------------:|:----------:|
+| Process start + init |   ~2-3s    |
+|     Session creation | ~1.5-2.5s  |
+|        Warmup prompt | ~1.7-2.7s  |
+|    Subsequent prompt | ~0.9-2.0s  |
 
 The first prompt on a session (warmup) is consistently ~0.5s slower than
 subsequent prompts. Session creation is ~2s regardless of how many sessions
@@ -183,12 +183,12 @@ mean_latency_s(N, T) = T * (1 + k * N) / p0
 
 where N = concurrent sessions and T = tokens per response.
 
-| Parameter | Local | Target | Meaning |
-|-----------|------:|-------:|---------|
-| a         | 173   | 76     | Base aggregate throughput (tok/s) |
-| b         | 0.737 | 0.895  | Scaling exponent (closer to 1 = more linear) |
-| p0        | 170   | 68     | Solo per-prompt generation rate (tok/s) |
-| k         | 0.033 | 0.008  | Per-session degradation coefficient |
+| Parameter | Local | Target | Meaning                                      |
+|-----------|------:|-------:|----------------------------------------------|
+| a         |   173 |     76 | Base aggregate throughput (tok/s)            |
+| b         | 0.737 |  0.895 | Scaling exponent (closer to 1 = more linear) |
+| p0        |   170 |     68 | Solo per-prompt generation rate (tok/s)      |
+| k         | 0.033 |  0.008 | Per-session degradation coefficient          |
 
 The target environment has a slower baseline (p0 is 40% of local) but
 scales more efficiently (b = 0.895 vs 0.737, k is 4x smaller).
@@ -245,8 +245,10 @@ Use `--host` to tag runs with a stable host identifier (defaults to
 output for cross-run comparison. Baselines are per-host — do not compare
 absolute values across different machines or network paths.
 
-The canonical baseline config is `mixed_model_gpt4o_extended.json` (the
-most exercised config with target environment data).
+The canonical baseline config is `scaling_curve_tokens.json` — single-model
+gpt-4.1, 688-token response, sequential baseline plus 1-16 concurrent
+sessions. It provides both the solo p0 and the N=8 point needed for the
+scaling factor without mixed-model variability.
 
 ## Directory Structure
 
@@ -278,10 +280,10 @@ specifies:
 
 The `default.json` config includes:
 
-| Test | Mode | Procs | Sessions | Parallel | Purpose |
-|------|------|------:|---------:|---------:|---------|
-| baseline_sequential | intra | 1 | 1 | 1 | Per-prompt latency baseline (3 sequential) |
-| intra_parallel_sessions_{2,4,8} | intra | 1 | 2/4/8 | 1 | Intra-process session scaling |
-| intra_same_session_2 | intra | 1 | 1 | 2 | Concurrent prompts on same session (expect cancellation) |
-| inter_process_{2,4} | inter | 2/4 | 1 | 1 | Inter-process scaling |
-| inter_process_{2x2,4x2} | inter | 2/4 | 2 | 1 | Combined inter-process + intra-process scaling |
+| Test                            | Mode  | Procs | Sessions | Parallel | Purpose                                                  |
+|---------------------------------|-------|------:|---------:|---------:|----------------------------------------------------------|
+| baseline_sequential             | intra |     1 |        1 |        1 | Per-prompt latency baseline (3 sequential)               |
+| intra_parallel_sessions_{2,4,8} | intra |     1 |    2/4/8 |        1 | Intra-process session scaling                            |
+| intra_same_session_2            | intra |     1 |        1 |        2 | Concurrent prompts on same session (expect cancellation) |
+| inter_process_{2,4}             | inter |   2/4 |        1 |        1 | Inter-process scaling                                    |
+| inter_process_{2x2,4x2}         | inter |   2/4 |        2 |        1 | Combined inter-process + intra-process scaling           |

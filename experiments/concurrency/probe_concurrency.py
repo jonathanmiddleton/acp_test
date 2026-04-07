@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import sys
 import time
 from datetime import datetime
@@ -397,6 +398,69 @@ def _summarize_results(results: list[PromptResult]) -> dict[str, Any]:
     return summary
 
 
+def compute_baseline_summary(all_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract a baseline summary from experiment results.
+
+    Identifies solo and concurrent results from the propagated test config
+    fields (``_sessions``, ``_parallel``, ``_is_sequential``) rather than
+    parsing label names, so this works with any config.
+
+    Returns a dict with:
+    - ``solo_latency_s``: mean latency for a single-session, single-prompt result
+    - ``solo_tok_s``: estimated tokens/s from response text length
+    - ``n8_latency_s``: mean latency for the 8-session result (if present)
+    - ``scaling_factor_8``: n8_latency / solo_latency — the primary scalar
+
+    The scaling factor normalizes out absolute environment speed and isolates
+    the concurrency degradation coefficient.  1.0 = no degradation.
+    """
+    summary: dict[str, Any] = {}
+
+    solo_result = None
+    n8_result = None
+
+    for r in all_results:
+        mean = r.get("latency_mean_s")
+        if mean is None:
+            continue
+
+        sessions = r.get("_sessions", 0)
+        parallel = r.get("_parallel", 1)
+        is_seq = r.get("_is_sequential", False)
+
+        # Solo: 1 session, 1 parallel prompt, non-sequential (single prompt).
+        # For sequential baselines (total_prompts > 1), still usable as p0
+        # since each prompt runs alone.
+        is_solo = sessions == 1 and parallel == 1
+        if is_solo and solo_result is None:
+            solo_result = r
+
+        # 8-session concurrent
+        if sessions == 8 and parallel == 1 and not is_seq:
+            n8_result = r
+
+    if solo_result and solo_result.get("latency_mean_s"):
+        p0_latency = solo_result["latency_mean_s"]
+        summary["solo_label"] = solo_result.get("test_label")
+        summary["solo_latency_s"] = round(p0_latency, 2)
+
+        # Estimate tok/s from text length if available
+        per_result = solo_result.get("per_result", [])
+        if per_result:
+            text_lens = [pr["text_len"] for pr in per_result if pr.get("text_len")]
+            if text_lens:
+                avg_chars = sum(text_lens) / len(text_lens)
+                summary["solo_tok_s"] = round((avg_chars / 4) / p0_latency, 1)
+
+        if n8_result and n8_result.get("latency_mean_s"):
+            n8_latency = n8_result["latency_mean_s"]
+            summary["n8_label"] = n8_result.get("test_label")
+            summary["n8_latency_s"] = round(n8_latency, 2)
+            summary["scaling_factor_8"] = round(n8_latency / p0_latency, 2)
+
+    return summary
+
+
 async def run_test(
     test_cfg: dict[str, Any],
     binary: str,
@@ -484,6 +548,11 @@ async def run_test(
     test_time = time.monotonic() - t0
     result["test_label"] = label
     result["test_total_time_s"] = test_time
+    # Propagate test config into result for baseline computation.
+    result["_sessions"] = test_cfg.get("sessions_per_process", 1)
+    result["_parallel"] = test_cfg.get("parallel_prompts_per_session", 1)
+    result["_total_prompts"] = test_cfg.get("total_prompts", 1)
+    result["_is_sequential"] = is_sequential
 
     test_logger.write(f"\n  Summary:")
     test_logger.write(f"    Successes: {result['successes']}/{result['count']}")
@@ -632,6 +701,38 @@ async def async_main(args: argparse.Namespace) -> None:
     # Summary table
     print_summary_table(all_results)
 
+    # Baseline scalar
+    host = args.host or socket.gethostname()
+    baseline = compute_baseline_summary(all_results)
+    baseline["host"] = host
+
+    if baseline.get("scaling_factor_8") is not None:
+        print(f"\n--- Baseline ({host}) ---")
+        print(
+            f"Solo latency: {baseline['solo_latency_s']}s"
+            + (
+                f"  ({baseline['solo_tok_s']} tok/s)"
+                if "solo_tok_s" in baseline
+                else ""
+            )
+        )
+        print(f"N=8 latency:  {baseline['n8_latency_s']}s")
+        print(f"Scaling factor (N=8): {baseline['scaling_factor_8']}")
+    elif baseline.get("solo_latency_s") is not None:
+        print(f"\n--- Baseline ({host}) ---")
+        print(
+            f"Solo latency: {baseline['solo_latency_s']}s"
+            + (
+                f"  ({baseline['solo_tok_s']} tok/s)"
+                if "solo_tok_s" in baseline
+                else ""
+            )
+        )
+        print("(No 8-session result found — scaling factor not computed)")
+    else:
+        print(f"\n--- Baseline ({host}) ---")
+        print("(No solo result found — baseline not computed)")
+
     # Write JSON results
     json_path = test_logger.path.replace(".log", ".json")
     with open(json_path, "w") as f:
@@ -640,8 +741,10 @@ async def async_main(args: argparse.Namespace) -> None:
                 "config": cfg,
                 "binary": binary,
                 "model": model,
+                "host": host,
                 "timestamp": datetime.now().isoformat(),
                 "results": all_results,
+                "baseline": baseline,
             },
             f,
             indent=2,
@@ -680,6 +783,11 @@ def main() -> None:
         nargs="+",
         default=None,
         help="Run only these test labels (default: all)",
+    )
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="Host identifier for baseline tracking (default: hostname)",
     )
     parser.add_argument(
         "-v",

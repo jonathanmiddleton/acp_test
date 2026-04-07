@@ -85,15 +85,21 @@ def _compatible_path_pattern() -> str:
 def _compatible_regex() -> re.Pattern[str]:
     """Compile a regex that matches the compatible binary path.
 
-    The path is fully fixed (no wildcards) — there is exactly one valid
-    location per platform.
+    The path is fully fixed — there is exactly one valid location per
+    platform per user.  The user's home directory is included so that
+    binaries from other users' processes (visible in ``ps``) are rejected.
     """
     pattern = _compatible_path_pattern()
     return re.compile(re.escape(pattern))
 
 
 def _is_compatible_path(binary_path: str) -> bool:
-    """Check whether a binary path matches the compatible IntelliJ 2025.3 pattern."""
+    """Check whether a binary path matches the compatible IntelliJ 2025.3 pattern.
+
+    The match is exact: correct user home, correct IDE version, correct
+    plugin structure.  Binaries from other users, other JetBrains IDEs
+    (PyCharm, etc.), or other IntelliJ versions are all rejected.
+    """
     return _compatible_regex().fullmatch(binary_path) is not None
 
 

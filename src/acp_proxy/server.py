@@ -91,26 +91,48 @@ def create_app(
     # conversation_hash is derived from the first user message in the
     # OpenAI messages array — this is stable across turns because
     # OpenCode replays the full history each time.
+    #
+    # Single-message requests (len(messages) == 1) with a key that
+    # already has an active session are treated as new conversations
+    # and get a fresh session.  This prevents identical first prompts
+    # (scripts, repeated agent invocations) from colliding into one
+    # session.  Multi-message requests (len > 1) are continuations —
+    # they reuse the existing session.
     _sessions: dict[tuple[str, str], str] = {}
     # Track which sessions have had their system prompt injected.
     _initialized_sessions: set[str] = set()
+    # Track sessions that have received at least one user prompt
+    # (beyond the system prompt injection).  Used to decide whether
+    # a single-message request hitting an existing key is a collision.
+    _active_sessions: set[str] = set()
 
     async def _get_session(model_id: str, messages: list[dict[str, Any]]) -> str:
         """Get or create an ACP session for this conversation.
 
         Sessions are identified by (model, hash_of_first_user_message).
         A new conversation in OpenCode produces a different first user
-        message and therefore a different session. The title generator
+        message and therefore a different session.  The title generator
         also produces a different first message ("You are a title
         generator...") and gets its own session — no collision.
+
+        Single-message requests that match an already-active session are
+        treated as new conversations: the old key is evicted and a fresh
+        session is created.  Multi-message requests always reuse the
+        existing session (they are continuations with replayed history).
         """
         import hashlib
 
         first_msg = AcpClient.extract_first_user_message(messages)
-        conv_hash = hashlib.sha256(first_msg.encode()).hexdigest()[:16]
+        conv_hash = hashlib.sha256(first_msg.encode()).hexdigest()
         key = (model_id, conv_hash)
 
-        if key not in _sessions:
+        is_single_message = len(messages) == 1
+        existing_session = _sessions.get(key)
+        needs_new = existing_session is None or (
+            is_single_message and existing_session in _active_sessions
+        )
+
+        if needs_new:
             session_id = await acp_client.create_session(cwd, model_id=model_id)
             _sessions[key] = session_id
             logger.info(
@@ -136,7 +158,9 @@ def create_app(
                 ):
                     pass
 
-        return _sessions[key]
+        session_id = _sessions[key]
+        _active_sessions.add(session_id)
+        return session_id
 
     @app.get("/v1/models")
     async def list_models() -> JSONResponse:
