@@ -40,7 +40,7 @@ a new session (correctly isolated).
 
 ## Decision
 
-Sessions are keyed by `(model_id, sha256(first_user_message)[:16])`.
+Sessions are keyed by `(model_id, sha256(first_user_message))`.
 
 - OpenCode replays the full message history with every request, so the first
   user message is **stable** across all turns of a conversation.
@@ -55,14 +55,30 @@ Sessions are keyed by `(model_id, sha256(first_user_message)[:16])`.
 Only the **last user message** is sent to the ACP session (see ADR-004),
 avoiding context duplication.
 
+### Single-message collision avoidance
+
+When a request contains exactly one message (`len(messages) == 1`) and the
+hash key already maps to a session that has received at least one prompt,
+the proxy treats it as a **new conversation** and creates a fresh session,
+evicting the old key mapping.
+
+Multi-message requests (`len(messages) > 1`) always reuse the existing
+session — they are continuations with replayed history and the first message
+serves as a stable anchor.
+
+This prevents scripts, repeated agent invocations, and any caller sending
+the same initial prompt from colliding into a single ACP session.
+
 ## Rationale
 
 - **No session identifier available.** OpenCode sends no thread/session ID.
   The first user message is the only stable conversation anchor in the
   request payload.
-- **Hash is collision-resistant enough.** 16 hex chars (64 bits) from SHA-256
-  is sufficient for the expected number of concurrent conversations (single
-  digits).
+- **Single-message requests are a reliable new-conversation signal.**
+  OpenCode always replays the full history for continuations, so
+  `len(messages) > 1` reliably indicates a continuation. A single-message
+  request hitting an existing active session is a new conversation, not a
+  follow-up.
 - **Concurrent safety.** Title generator and conversation are naturally
   separated because their first messages differ. This eliminated the
   "Operation cancelled" errors without any special-case logic.
@@ -73,8 +89,16 @@ avoiding context duplication.
   spec has no `session/close` method). They accumulate in the language server's
   internal state. The server may have internal TTL — this needs empirical
   testing. If not, periodic process restart is the cleanup strategy.
-- **First-message sensitivity.** If two conversations happen to start with the
-  same first user message, they'll share a session. In practice this is
-  unlikely — OpenCode's first messages include context-specific content.
+- **Evicted sessions are orphaned.** When a single-message collision creates
+  a new session, the previous session for that key is no longer reachable
+  through the proxy's routing table. It remains in the language server's
+  memory but receives no further prompts. This contributes to session
+  accumulation.
 - **Session creation latency.** Each new conversation incurs ~2s for ACP
   session creation. This is a one-time cost per conversation, not per turn.
+
+## Revision History
+
+| Date       | Change                                                                                                                                                                              |
+|------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-04-07 | Use full SHA-256 hash (removed 16-char truncation). Added single-message collision avoidance: `len(messages)==1` with an active session creates a fresh session instead of reusing. |

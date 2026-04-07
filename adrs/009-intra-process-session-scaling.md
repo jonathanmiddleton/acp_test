@@ -37,29 +37,29 @@ rate, but the scaling curve shape is the same.
 **Local scaling curve (gpt-4.1, multi-run averages):**
 
 | Sessions | Per-prompt tok/s | Aggregate tok/s | Mean latency (s) |
-|---------:|:----------------:|:---------------:|:-----------------:|
-| 1        | 170              | 170             | 4.2               |
-| 2        | 169              | 307             | 4.1               |
-| 4        | 152              | 509             | 4.7               |
-| 8        | 118              | 580             | 6.2               |
-| 12       | 119              | 1272            | 5.8               |
-| 16       | 113              | 1320            | 6.2               |
-| 20       | 110              | 1655            | 6.4               |
-| 24       | 97               | 1988            | 7.1               |
-| 32       | 81               | 2041            | 8.6               |
+|---------:|:----------------:|:---------------:|:----------------:|
+|        1 |       170        |       170       |       4.2        |
+|        2 |       169        |       307       |       4.1        |
+|        4 |       152        |       509       |       4.7        |
+|        8 |       118        |       580       |       6.2        |
+|       12 |       119        |      1272       |       5.8        |
+|       16 |       113        |      1320       |       6.2        |
+|       20 |       110        |      1655       |       6.4        |
+|       24 |        97        |      1988       |       7.1        |
+|       32 |        81        |      2041       |       8.6        |
 
 **Target environment scaling (gpt-4.1 + gpt-4o mixed, single runs):**
 
 | Sessions | Wall time (s) | Throughput (p/s) | Est. agg tok/s |
 |---------:|:-------------:|:----------------:|:--------------:|
-| 1        | ~10.0         | 0.10             | 69             |
-| 8        | ~11.6         | 0.69             | 475            |
-| 16       | ~12.0         | 1.33             | 915            |
-| 24       | ~13.3         | 1.80             | 1238           |
-| 32       | 13.54         | 2.36             | 1624           |
-| 40       | 13.95         | 2.87             | 1975           |
-| 48       | 13.98         | 3.43             | 2360           |
-| 64       | 14.36         | 4.46             | 3069           |
+|        1 |     ~10.0     |       0.10       |       69       |
+|        8 |     ~11.6     |       0.69       |      475       |
+|       16 |     ~12.0     |       1.33       |      915       |
+|       24 |     ~13.3     |       1.80       |      1238      |
+|       32 |     13.54     |       2.36       |      1624      |
+|       40 |     13.95     |       2.87       |      1975      |
+|       48 |     13.98     |       3.43       |      2360      |
+|       64 |     14.36     |       4.46       |      3069      |
 
 **Key observations:**
 
@@ -108,12 +108,12 @@ mean_latency_s(N, T) = T / per_prompt_tok_s(N)
 
 where N = concurrent sessions and T = tokens per response.
 
-| Parameter | Local | Target | Meaning |
-|-----------|------:|-------:|---------|
-| a         | 173   | 76     | Base aggregate throughput (tok/s) |
-| b         | 0.737 | 0.895  | Scaling exponent (closer to 1 = more linear) |
-| p0        | 170   | 68     | Solo per-prompt generation rate (tok/s) |
-| k         | 0.033 | 0.008  | Per-session degradation coefficient |
+| Parameter | Local | Target | Meaning                                      |
+|-----------|------:|-------:|----------------------------------------------|
+| a         |   173 |     76 | Base aggregate throughput (tok/s)            |
+| b         | 0.737 |  0.895 | Scaling exponent (closer to 1 = more linear) |
+| p0        |   170 |     68 | Solo per-prompt generation rate (tok/s)      |
+| k         | 0.033 |  0.008 | Per-session degradation coefficient          |
 
 The target environment has a slower baseline (p0 is 40% of local) but
 scales more efficiently (b = 0.895 vs 0.737, k is 4x smaller). This is
@@ -125,14 +125,14 @@ grows with concurrency.
 
 | Sessions | Local (s) | Target (s) |
 |---------:|:---------:|:----------:|
-| 1        | 4.2       | 10.2       |
-| 4        | 4.6       | 10.5       |
-| 8        | 5.1       | 10.8       |
-| 16       | 6.2       | 11.5       |
-| 24       | 7.2       | 12.1       |
-| 32       | 8.3       | 12.8       |
-| 48       | 10.4      | 14.1       |
-| 64       | 12.5      | 15.4       |
+|        1 |    4.2    |    10.2    |
+|        4 |    4.6    |    10.5    |
+|        8 |    5.1    |    10.8    |
+|       16 |    6.2    |    11.5    |
+|       24 |    7.2    |    12.1    |
+|       32 |    8.3    |    12.8    |
+|       48 |   10.4    |    14.1    |
+|       64 |   12.5    |    15.4    |
 
 ## Decision
 

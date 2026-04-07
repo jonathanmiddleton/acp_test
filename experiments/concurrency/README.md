@@ -14,7 +14,7 @@ A single copilot-language-server process handles multiple concurrent sessions
 without errors. All prompts complete successfully with correct, deterministic
 output (2752 chars / 688 tokens every time).
 
-**Token throughput scaling curve (3-run averages, gpt-4.1, 688-token response):**
+**Token throughput scaling curve (local, multi-run averages, gpt-4.1, 688-token response):**
 
 | Sessions | Per-prompt tok/s | Aggregate tok/s | Mean latency (s) |
 |---------:|:----------------:|:---------------:|:-----------------:|
@@ -23,17 +23,34 @@ output (2752 chars / 688 tokens every time).
 | 4        | 152              | 509             | 4.7               |
 | 8        | 118              | 580             | 6.2               |
 | 12       | 119              | 1272            | 5.8               |
-| 16       | 113              | 1212            | 6.2               |
+| 16       | 113              | 1320            | 6.2               |
+| 20       | 110              | 1655            | 6.4               |
+| 24       | 97               | 1988            | 7.1               |
+| 32       | 81               | 2041            | 8.6               |
+
+**Target environment scaling (gpt-4.1 + gpt-4o mixed, single runs):**
+
+| Sessions | Wall time (s) | Throughput (p/s) | Est. agg tok/s |
+|---------:|:-------------:|:----------------:|:--------------:|
+| 1        | ~10.0         | 0.10             | 69             |
+| 8        | ~11.6         | 0.69             | 475            |
+| 16       | ~12.0         | 1.33             | 915            |
+| 24       | ~13.3         | 1.80             | 1238           |
+| 32       | 13.54         | 2.36             | 1624           |
+| 40       | 13.95         | 2.87             | 1975           |
+| 48       | 13.98         | 3.43             | 2360           |
+| 64       | 14.36         | 4.46             | 3069           |
 
 1 token ~ 4 characters. Per-prompt tok/s is the per-agent experience (how
 fast each agent sees its response generated). Aggregate tok/s is total token
 production across all sessions divided by wall time.
 
-**Per-prompt generation rate degrades ~30% then stabilizes.** Each agent sees
-~115 tok/s at 8-16 sessions, down from ~170 tok/s solo. The backend throttles
-per-request generation under concurrent load. Aggregate throughput peaks at
-~1270 tok/s (12 sessions) but has high variance at 8+ sessions due to tail
-latency outliers.
+**No hard throughput ceiling exists.** Earlier results at 12-16 sessions
+appeared to show a plateau, but extending to 32 (local) and 64 (target)
+revealed continued scaling. The backend spreads compute across concurrent
+requests rather than imposing a fixed rate limit. The tradeoff is aggregate
+throughput vs per-agent latency — adding sessions increases total token
+production but degrades each individual agent's generation rate.
 
 **Prompts-per-second (trivial 1-char response, isolating round-trip overhead):**
 
@@ -139,34 +156,46 @@ already exist on the process.
    dedicated session for the duration of its conversation. Sessions accumulate
    context, so switching sessions mid-conversation loses history.
 
-5. **8-12 sessions is the operating sweet spot.** Beyond 12, throughput
-   plateaus while latency and tail variance increase. 8 sessions give ~3.4 p/s
-   at 64% efficiency; 12 give ~4.3 p/s at 53%. For Meadow's typical 4-6
-   concurrent agents plus subagents, 8-12 sessions provides headroom without
-   hitting the diminishing-returns zone.
+5. **Size for latency, not throughput.** There is no hard throughput
+   ceiling — scaling continues to at least 64 sessions. Use the scaling
+   model to estimate per-agent latency at a given concurrency:
+
+   `mean_latency_s = T * (1 + k * N) / p0`
+
+   For Meadow's typical 4-8 concurrent agents, 8-16 sessions keeps
+   per-agent latency under ~12s on the target environment. For workflows
+   with more subagents, 32-64 sessions are viable.
 
 6. **Process-level redundancy** — if the language server crashes, a second
    standby process could be kept warm for failover. But do not use multiple
    processes for load distribution.
 
-### Throughput ceiling
+### Scaling model
 
-Two ceilings, depending on what you measure:
+The empirical data fits two parameterized functions (R² ≥ 0.94 local,
+≥ 0.99 target):
 
-- **Round-trip ceiling**: ~4.5 prompts/s (trivial response). This is the
-  maximum request rate the backend will service.
-- **Token generation ceiling**: ~1270 aggregate tok/s (688-token response,
-  12 sessions). Each individual agent sees ~115 tok/s.
+```
+aggregate_tok_s(N)   = a * N^b
+per_prompt_tok_s(N)  = p0 / (1 + k * N)
+mean_latency_s(N, T) = T * (1 + k * N) / p0
+```
 
-Both are backend-imposed limits. 12 and 16 sessions produce nearly identical
-throughput despite doubling local parallelism.
+where N = concurrent sessions and T = tokens per response.
 
-For Meadow's multi-agent workloads, **per-agent latency is the binding
-constraint**, not aggregate throughput. At 8-16 concurrent agents, each agent
-waits ~6s for a 688-token response vs ~4s solo — a 50% latency penalty.
+| Parameter | Local | Target | Meaning |
+|-----------|------:|-------:|---------|
+| a         | 173   | 76     | Base aggregate throughput (tok/s) |
+| b         | 0.737 | 0.895  | Scaling exponent (closer to 1 = more linear) |
+| p0        | 170   | 68     | Solo per-prompt generation rate (tok/s) |
+| k         | 0.033 | 0.008  | Per-session degradation coefficient |
+
+The target environment has a slower baseline (p0 is 40% of local) but
+scales more efficiently (b = 0.895 vs 0.737, k is 4x smaller).
 
 See [ADR-009](../../adrs/009-intra-process-session-scaling.md) for the
-architectural decision based on these findings.
+full architectural decision, scaling curves from both environments, and
+latency planning tables.
 
 ## Running the Experiment
 
@@ -190,7 +219,34 @@ python probe_concurrency.py --config configs/default.json \
 
 # Debug logging (verbose JSON-RPC traffic)
 python probe_concurrency.py --config configs/default.json -v
+
+# Tag with host identity (for baseline tracking across machines)
+python probe_concurrency.py --config configs/mixed_model_gpt4o_extended.json \
+    --host target-mbp-na
 ```
+
+### Baseline tracking
+
+The probe computes a baseline summary from each run and includes it in the
+JSON output under the `baseline` key. The primary scalar is the **scaling
+factor at N=8** — the ratio of mean latency at 8 concurrent sessions to
+solo latency. This normalizes out absolute environment speed and isolates
+the concurrency degradation coefficient.
+
+```
+--- Baseline (bigmac.local) ---
+Solo latency: 4.20s  (170.0 tok/s)
+N=8 latency:  6.20s
+Scaling factor (N=8): 1.48
+```
+
+Use `--host` to tag runs with a stable host identifier (defaults to
+`socket.gethostname()`). The host and baseline are recorded in the JSON
+output for cross-run comparison. Baselines are per-host — do not compare
+absolute values across different machines or network paths.
+
+The canonical baseline config is `mixed_model_gpt4o_extended.json` (the
+most exercised config with target environment data).
 
 ## Directory Structure
 
@@ -198,11 +254,14 @@ python probe_concurrency.py --config configs/default.json -v
 acp_harness.py        Lightweight async ACP transport + client for experiments
 probe_concurrency.py  Main experiment script
 configs/
-  default.json        Short prompt, 9 test configurations (intra + inter + same-session)
-  longer_prompt.json  Longer prompt, 9 test configurations
-  scaling_curve.json         Intra-process p/s scaling: 1-16 sessions, trivial prompt
-  scaling_curve_tokens.json  Intra-process tok/s scaling: 1-16 sessions, 688-token response
-  mixed_model_tokens.json   Mixed-model scaling: gpt-4.1 + haiku, 688-token response
+  default.json                      Short prompt, 9 tests (intra + inter + same-session)
+  longer_prompt.json                Longer prompt, 9 tests
+  scaling_curve.json                Intra-process p/s scaling: 1-16 sessions, trivial prompt
+  scaling_curve_tokens.json         Intra-process tok/s scaling: 1-16 sessions, 688-token response
+  scaling_curve_tokens_extended.json  Extended tok/s scaling: 1-32 sessions
+  mixed_model_tokens.json           Mixed-model: gpt-4.1 + haiku, 1-16 sessions
+  mixed_model_gpt4o.json            Mixed-model: gpt-4.1 + gpt-4o, 1-16 sessions (target env)
+  mixed_model_gpt4o_extended.json   Extended mixed-model: 1-32 sessions (target env)
 logs/                 Per-run output (gitignored)
 ```
 
