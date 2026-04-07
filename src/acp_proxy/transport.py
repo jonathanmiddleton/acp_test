@@ -36,8 +36,20 @@ class AcpTransport:
         self._reader_task: asyncio.Task[None] | None = None
         self._closed = False
 
-    async def start(self, binary_path: str) -> None:
-        """Launch the language server subprocess in ACP mode."""
+    async def start(
+        self,
+        binary_path: str,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        """Launch the language server subprocess in ACP mode.
+
+        Args:
+            binary_path: Path to the copilot-language-server binary.
+            env: Environment variables for the subprocess.  If None, the
+                current process environment is inherited.  Use
+                :func:`config.build_subprocess_env` to construct an env
+                dict with proxy settings applied.
+        """
         logger.info("Starting copilot-language-server: %s", binary_path)
         self._process = await asyncio.create_subprocess_exec(
             binary_path,
@@ -46,6 +58,7 @@ class AcpTransport:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
         self._reader_task = asyncio.create_task(self._read_loop())
         # Drain stderr to avoid blocking

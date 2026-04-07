@@ -89,11 +89,33 @@ python -m pytest tests/ -v
 
 Integration tests require the `copilot-language-server` binary to be available. They **fail** (not skip) if the binary is not found — see [ADR-005](adrs/005-fail-loud-testing.md). Run unit tests only with: `python -m pytest tests/test_transport.py tests/test_server.py tests/test_discovery.py -v`
 
+## Proxy Configuration
+
+In corporate environments, the `copilot-language-server` needs proxy
+settings to reach `api.github.com`. Rather than setting global environment
+variables, create a config file at `~/.acp_proxy/config.json`:
+
+```json
+{
+  "https_proxy": "http://your-proxy:port",
+  "http_proxy": "http://your-proxy:port",
+  "no_proxy": "localhost,127.0.0.1"
+}
+```
+
+The proxy reads this at startup and injects the settings into the language
+server subprocess environment only — the global environment is not modified.
+
+Environment variables (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`) take
+precedence over config file values if both are set.
+
 ## Options
 
-| Flag          | Default           | Description                                                                    |
-|---------------|-------------------|--------------------------------------------------------------------------------|
-| `--binary`    | auto-discovered   | Path to `copilot-language-server`                                              |
-| `--port`      | 8765              | Port for the HTTP server                                                       |
-| `--cwd`       | current directory | Working directory for ACP sessions (default: `cwd` where acp_proxy is executed |
-| `--log-level` | INFO              | DEBUG, INFO, WARNING, ERROR                                                    |
+| Flag              | Default           | Description                                                                    |
+|-------------------|-------------------|--------------------------------------------------------------------------------|
+| `--binary`        | auto-discovered   | Path to `copilot-language-server`                                              |
+| `--port`          | 8765              | Port for the HTTP server                                                       |
+| `--cwd`           | current directory | Working directory for ACP sessions (default: `cwd` where acp_proxy is executed |
+| `--log-level`     | INFO              | DEBUG, INFO, WARNING, ERROR                                                    |
+| `--log-file`      | logs/proxy.log    | Log file path (always DEBUG level)                                             |
+| `--system-prompt` | none              | Path to a file containing a system prompt to inject into each new session      |

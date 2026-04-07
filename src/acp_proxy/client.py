@@ -82,11 +82,16 @@ class AcpClient:
     def agent_info(self) -> dict[str, str | None]:
         return {"name": self._agent_name, "version": self._agent_version}
 
-    async def start(self) -> None:
-        """Start the language server and complete ACP initialization."""
+    async def start(self, env: dict[str, str] | None = None) -> None:
+        """Start the language server and complete ACP initialization.
+
+        Args:
+            env: Environment variables for the subprocess.  If None, the
+                current process environment is inherited.
+        """
         self._transport.on_notification(self._handle_notification)
         self._transport.on_request(self._handle_agent_request)
-        await self._transport.start(self._binary_path)
+        await self._transport.start(self._binary_path, env=env)
         await self._initialize()
 
     async def stop(self) -> None:

@@ -31,6 +31,7 @@ import sys
 import uvicorn
 
 from .client import AcpClient
+from .config import build_subprocess_env, config_path, load_config
 from .discovery import find_binary
 from .server import create_app
 
@@ -77,10 +78,11 @@ async def run(
     port: int,
     cwd: str,
     system_prompt: str | None = None,
+    subprocess_env: dict[str, str] | None = None,
 ) -> None:
     """Start the ACP client and HTTP server."""
     client = AcpClient(binary)
-    await client.start()
+    await client.start(env=subprocess_env)
 
     # Create an initial session to discover models
     await client.create_session(cwd)
@@ -200,7 +202,20 @@ def main() -> None:
     logger.info("Working directory (cwd): %s", args.cwd)
     logger.info("Platform: %s", platform.system())
 
-    asyncio.run(run(binary, args.port, args.cwd, system_prompt=system_prompt))
+    # Load user config and build subprocess environment with proxy settings
+    cfg = load_config()
+    subprocess_env = build_subprocess_env(cfg)
+    logger.info("Config file: %s", config_path())
+
+    asyncio.run(
+        run(
+            binary,
+            args.port,
+            args.cwd,
+            system_prompt=system_prompt,
+            subprocess_env=subprocess_env,
+        )
+    )
 
 
 if __name__ == "__main__":
