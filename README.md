@@ -139,6 +139,17 @@ and per request. These are estimates (~4 chars/token) — actual usage is
 higher because Copilot's backend injects its own system prompt, safety
 policies, and tool definitions that we cannot observe.
 
+## ACP Specification
+
+The [Agent Client Protocol](https://agentclientprotocol.com) standardizes
+communication between code editors and coding agents. The full documentation
+index is at https://agentclientprotocol.com/llms.txt.
+
+Key references: [session setup](https://agentclientprotocol.com/protocol/session-setup.md)
+(`session/new`, `session/load`),
+[prompt turn](https://agentclientprotocol.com/protocol/prompt-turn.md),
+[schema](https://agentclientprotocol.com/protocol/schema.md).
+
 ## Options
 
 | Flag              | Default           | Description                                                                    |
@@ -146,6 +157,6 @@ policies, and tool definitions that we cannot observe.
 | `--binary`        | auto-discovered   | Path to `copilot-language-server`                                              |
 | `--port`          | 8765              | Port for the HTTP server                                                       |
 | `--cwd`           | current directory | Working directory for ACP sessions (default: `cwd` where acp_proxy is executed |
-| `--log-level`     | INFO              | DEBUG, INFO, WARNING, ERROR                                                    |
+| `--log-level`     | DEBUG             | DEBUG, INFO, WARNING, ERROR (DEBUG default during development phase)            |
 | `--log-file`      | logs/proxy.log    | Log file path (always DEBUG level)                                             |
 | `--system-prompt` | none              | Path to a file containing a system prompt to inject into each new session      |

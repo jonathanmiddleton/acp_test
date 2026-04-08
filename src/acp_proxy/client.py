@@ -18,6 +18,33 @@ from .transport import AcpError, AcpTransport
 
 logger = logging.getLogger(__name__)
 
+# Default prompt timeout in seconds.  If the ACP server does not complete
+# a session/prompt response within this window, the prompt is cancelled and
+# a PromptTimeout is raised.  The experiment harness uses 120s; production
+# should match.  This is the single most important safety net — without it,
+# a hung language server blocks the HTTP connection indefinitely.
+DEFAULT_PROMPT_TIMEOUT_S: float = 120.0
+
+
+class PromptTimeout(Exception):
+    """Raised when a session/prompt exceeds the configured deadline.
+
+    Attributes:
+        session_id: The ACP session that timed out.
+        timeout_s: The deadline that was exceeded.
+        partial_text: Any response text collected before the timeout.
+    """
+
+    def __init__(
+        self, session_id: str, timeout_s: float, partial_text: str = ""
+    ) -> None:
+        self.session_id = session_id
+        self.timeout_s = timeout_s
+        self.partial_text = partial_text
+        super().__init__(
+            f"session/prompt timed out after {timeout_s}s (session {session_id[:8]})"
+        )
+
 
 def _summarize(obj: Any, max_len: int = 200) -> str:
     """Summarize an object for logging — truncate long values."""
@@ -142,7 +169,10 @@ class AcpClient:
         return session_id
 
     async def prompt(
-        self, session_id: str, messages: list[dict[str, Any]]
+        self,
+        session_id: str,
+        messages: list[dict[str, Any]],
+        timeout_s: float | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Send a prompt and yield streaming update events.
 
@@ -154,12 +184,24 @@ class AcpClient:
         Args:
             session_id: The ACP session ID.
             messages: OpenAI-format messages array.
+            timeout_s: Maximum seconds to wait for the prompt to complete.
+                Defaults to DEFAULT_PROMPT_TIMEOUT_S.  If the deadline is
+                exceeded, the prompt task is cancelled and PromptTimeout
+                is raised with any partial text collected so far.
 
         Yields:
             Update dicts from ACP session/update notifications.
+
+        Raises:
+            PromptTimeout: If the prompt does not complete within the deadline.
+            ValueError: If the session ID is unknown.
         """
         if session_id not in self._sessions:
             raise ValueError(f"Unknown session: {session_id}")
+
+        effective_timeout = (
+            timeout_s if timeout_s is not None else DEFAULT_PROMPT_TIMEOUT_S
+        )
 
         # Convert OpenAI messages to ACP prompt content blocks
         prompt_content = self._messages_to_prompt(messages)
@@ -167,6 +209,9 @@ class AcpClient:
         # Set up a queue to receive streaming updates for this session
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         self._update_queues[session_id] = queue
+
+        deadline = asyncio.get_event_loop().time() + effective_timeout
+        partial_text = ""
 
         try:
             # Send prompt — this returns when the turn is complete
@@ -177,13 +222,32 @@ class AcpClient:
                 )
             )
 
-            # Yield updates as they arrive
+            # Yield updates as they arrive, enforcing the deadline
             while True:
-                # Check both the queue and the prompt completion
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    prompt_task.cancel()
+                    logger.error(
+                        "Prompt timed out after %.1fs (session %s). "
+                        "Partial text collected: %d chars",
+                        effective_timeout,
+                        session_id[:8],
+                        len(partial_text),
+                    )
+                    raise PromptTimeout(session_id, effective_timeout, partial_text)
+
+                # Poll with the smaller of 0.1s or remaining time
+                poll_timeout = min(0.1, remaining)
                 try:
-                    update = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    update = await asyncio.wait_for(queue.get(), timeout=poll_timeout)
                     if update is None:
                         break
+                    # Track partial text for timeout diagnostics
+                    kind = update.get("sessionUpdate", "")
+                    if kind == "agent_message_chunk":
+                        content = update.get("content", {})
+                        if content.get("type") == "text":
+                            partial_text += content.get("text", "")
                     yield update
                 except asyncio.TimeoutError:
                     if prompt_task.done():

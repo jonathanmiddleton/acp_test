@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from .client import AcpClient
+from .client import AcpClient, PromptTimeout
 from .config import estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -258,7 +258,21 @@ def create_app(
                 },
             )
 
-        session_id = await _get_session(model_id, messages)
+        try:
+            session_id = await _get_session(model_id, messages)
+        except Exception as e:
+            logger.error("Session creation failed: %s", e, exc_info=True)
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "error": {
+                        "message": f"Failed to create ACP session: {e}",
+                        "type": "server_error",
+                        "code": "acp_session_error",
+                    }
+                },
+            )
+
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
@@ -281,15 +295,37 @@ def create_app(
                 },
             )
         else:
-            return await _non_streaming_response(
-                acp_client,
-                session_id,
-                messages,
-                completion_id,
-                created,
-                model_id,
-                _session_tokens,
-            )
+            try:
+                return await _non_streaming_response(
+                    acp_client,
+                    session_id,
+                    messages,
+                    completion_id,
+                    created,
+                    model_id,
+                    _session_tokens,
+                )
+            except PromptTimeout as e:
+                logger.error(
+                    "Prompt timed out: %s (partial text: %d chars)",
+                    e,
+                    len(e.partial_text),
+                )
+                return JSONResponse(
+                    status_code=504,
+                    content={
+                        "error": {
+                            "message": (
+                                f"ACP prompt timed out after {e.timeout_s}s. "
+                                f"The copilot-language-server did not respond "
+                                f"within the deadline."
+                            ),
+                            "type": "server_error",
+                            "code": "prompt_timeout",
+                            "param": e.session_id,
+                        }
+                    },
+                )
 
     @app.get("/health")
     async def health() -> JSONResponse:
@@ -373,76 +409,107 @@ async def _stream_response(
     model_id: str,
     session_tokens: dict[str, dict[str, int]],
 ) -> AsyncIterator[str]:
-    """Stream SSE events in OpenAI format."""
+    """Stream SSE events in OpenAI format.
+
+    If a PromptTimeout occurs mid-stream, we emit an error event and
+    close the stream.  The client sees whatever was delivered before the
+    timeout plus the error indicator.  This is the best we can do — once
+    SSE headers are sent, we cannot change the HTTP status code.
+    """
 
     # Estimate prompt tokens from the user message we're sending
     last_msg = AcpClient.extract_last_user_message(messages)
     est_prompt = estimate_tokens(last_msg)
     response_chars = 0
 
-    async for update in client.prompt(session_id, messages):
-        if update.get("done"):
-            sr = update.get("stopReason", "end_turn")
-            finish_reason = _map_stop_reason(sr)
+    try:
+        async for update in client.prompt(session_id, messages):
+            if update.get("done"):
+                sr = update.get("stopReason", "end_turn")
+                finish_reason = _map_stop_reason(sr)
 
-            # Log token estimates at end of stream
-            est_completion = estimate_tokens("x" * response_chars)
-            if session_id in session_tokens:
-                session_tokens[session_id]["prompt"] += est_prompt
-                session_tokens[session_id]["completion"] += est_completion
-                totals = session_tokens[session_id]
-                logger.info(
-                    "Token estimate (session %s): prompt ~%d, completion ~%d | "
-                    "session total: prompt ~%d, completion ~%d, combined ~%d "
-                    "(estimates only — actual usage is higher due to "
-                    "provider injection)",
-                    session_id[:8],
-                    est_prompt,
-                    est_completion,
-                    totals["prompt"],
-                    totals["completion"],
-                    totals["prompt"] + totals["completion"],
-                )
+                # Log token estimates at end of stream
+                est_completion = estimate_tokens("x" * response_chars)
+                if session_id in session_tokens:
+                    session_tokens[session_id]["prompt"] += est_prompt
+                    session_tokens[session_id]["completion"] += est_completion
+                    totals = session_tokens[session_id]
+                    logger.info(
+                        "Token estimate (session %s): prompt ~%d, completion ~%d"
+                        " | session total: prompt ~%d, completion ~%d, "
+                        "combined ~%d (estimates only — actual usage is higher "
+                        "due to provider injection)",
+                        session_id[:8],
+                        est_prompt,
+                        est_completion,
+                        totals["prompt"],
+                        totals["completion"],
+                        totals["prompt"] + totals["completion"],
+                    )
 
-            # Send final chunk with finish_reason
-            chunk = {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": model_id,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {},
-                        "finish_reason": finish_reason,
-                    }
-                ],
+                # Send final chunk with finish_reason
+                chunk = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": model_id,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": finish_reason,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+                break
+
+            kind = update.get("sessionUpdate", "")
+            if kind == "agent_message_chunk":
+                content = update.get("content", {})
+                if content.get("type") == "text":
+                    text = content.get("text", "")
+                    if text:
+                        response_chars += len(text)
+                        chunk = {
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": model_id,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {
+                                        "role": "assistant",
+                                        "content": text,
+                                    },
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+
+    except PromptTimeout as e:
+        logger.error(
+            "Streaming prompt timed out: %s (partial text: %d chars)",
+            e,
+            len(e.partial_text),
+        )
+        # Emit an error event so the client knows the stream was
+        # terminated due to a timeout, not a clean completion.
+        error_data = {
+            "error": {
+                "message": (
+                    f"ACP prompt timed out after {e.timeout_s}s. "
+                    f"Partial response was delivered before timeout."
+                ),
+                "type": "server_error",
+                "code": "prompt_timeout",
             }
-            yield f"data: {json.dumps(chunk)}\n\n"
-            yield "data: [DONE]\n\n"
-            break
-
-        kind = update.get("sessionUpdate", "")
-        if kind == "agent_message_chunk":
-            content = update.get("content", {})
-            if content.get("type") == "text":
-                text = content.get("text", "")
-                if text:
-                    response_chars += len(text)
-                    chunk = {
-                        "id": completion_id,
-                        "object": "chat.completion.chunk",
-                        "created": created,
-                        "model": model_id,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {"role": "assistant", "content": text},
-                                "finish_reason": None,
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(chunk)}\n\n"
+        }
+        yield f"data: {json.dumps(error_data)}\n\n"
+        yield "data: [DONE]\n\n"
 
 
 def _map_stop_reason(acp_reason: str) -> str:

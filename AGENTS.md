@@ -18,18 +18,56 @@ separate from Meadow.
 OpenCode  →  ACP Proxy (localhost)  →  copilot-language-server  →  Copilot backend
 ```
 
+## ACP Specification Reference
+
+The Agent Client Protocol specification is at **https://agentclientprotocol.com**.
+The full documentation index (suitable for LLM consumption) is at
+**https://agentclientprotocol.com/llms.txt**.
+
+Key spec pages relevant to this proxy:
+
+| Topic | URL | Notes |
+|-------|-----|-------|
+| Protocol overview | https://agentclientprotocol.com/protocol/overview.md | Core architecture and concepts |
+| Session setup | https://agentclientprotocol.com/protocol/session-setup.md | `session/new` and `session/load` — load replays conversation history |
+| Session list | https://agentclientprotocol.com/protocol/session-list.md | `session/list` — discover existing sessions (stabilized) |
+| Prompt turn | https://agentclientprotocol.com/protocol/prompt-turn.md | `session/prompt` and `session/update` streaming |
+| Session modes | https://agentclientprotocol.com/protocol/session-modes.md | Agent operating modes (Ask, Agent, Plan, etc.) |
+| Session config | https://agentclientprotocol.com/protocol/session-config-options.md | `session/set_config_option` (stabilized) |
+| Initialization | https://agentclientprotocol.com/protocol/initialization.md | Capability negotiation |
+| Terminals | https://agentclientprotocol.com/protocol/terminals.md | Terminal callback handling |
+| File system | https://agentclientprotocol.com/protocol/file-system.md | File read/write callbacks |
+| Schema | https://agentclientprotocol.com/protocol/schema.md | Full type definitions |
+
+RFDs (Requests for Dialog — proposed but not yet stabilized):
+
+| RFD | URL | Status |
+|-----|-----|--------|
+| Session close | https://agentclientprotocol.com/rfds/session-close.md | Proposed — would allow explicit session cleanup |
+| Session resume | https://agentclientprotocol.com/rfds/session-resume.md | Proposed — like load but without history replay |
+| Session delete | https://agentclientprotocol.com/rfds/session-delete.md | Proposed |
+| Request cancellation | https://agentclientprotocol.com/rfds/request-cancellation.md | Proposed — `$/cancel_request` for any JSON-RPC request |
+| Session usage | https://agentclientprotocol.com/rfds/session-usage.md | Proposed — token/context/cost tracking |
+| Proxy chains | https://agentclientprotocol.com/rfds/proxy-chains.md | Proposed — agent extensions via proxies |
+| Custom LLM endpoint | https://agentclientprotocol.com/rfds/custom-llm-endpoint.md | Proposed — configurable LLM providers |
+
+The OpenAPI schema is at https://agentclientprotocol.com/api-reference/openapi.json.
+
 ## Module Architecture
 
-| Module | Owns | Does NOT own |
-|---|---|---|
-| `transport.py` | NDJSON/stdio framing, subprocess lifecycle, JSON-RPC message correlation, bidirectional dispatch | Protocol semantics, session logic |
-| `client.py` | ACP initialization, session lifecycle, model selection, prompt execution, agent callback handling (permissions, fs, terminal) | HTTP serving, OpenAI format translation |
-| `server.py` | FastAPI app, OpenAI-compatible endpoints, request/response translation, SSE streaming | ACP protocol details, subprocess management |
-| `discovery.py` | Binary resolution (single source of truth). Only accepts IntelliJ IDEA 2025.3 Copilot plugin binary. Validates `ps` matches against the known-compatible path. | Protocol, sessions, serving |
-| `__main__.py` | CLI entry point, argument parsing, wiring | Binary discovery logic, business logic |
+| Module         | Owns                                                                                                                                                           | Does NOT own                                |
+|----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------|
+| `transport.py` | NDJSON/stdio framing, subprocess lifecycle, JSON-RPC message correlation, bidirectional dispatch                                                               | Protocol semantics, session logic           |
+| `client.py`    | ACP initialization, session lifecycle, model selection, prompt execution, agent callback handling (permissions, fs, terminal)                                  | HTTP serving, OpenAI format translation     |
+| `server.py`    | FastAPI app, OpenAI-compatible endpoints, request/response translation, SSE streaming                                                                          | ACP protocol details, subprocess management |
+| `discovery.py` | Binary resolution (single source of truth). Only accepts IntelliJ IDEA 2025.3 Copilot plugin binary. Validates `ps` matches against the known-compatible path. | Protocol, sessions, serving                 |
+| `__main__.py`  | CLI entry point, argument parsing, wiring                                                                                                                      | Binary discovery logic, business logic      |
 
 ## Tests
 
+- Avoid mocks as much as possible
+- Test actual implementations, do not duplicate logic into tests
+- Favor writing property based tests
 - **Unit tests** (`test_transport.py`, `test_client.py`, `test_server.py`, `test_discovery.py`): Fake/mock objects, no real subprocess.
 - **Integration tests** (`test_integration.py`): Real copilot-language-server. **Fails** (not skips) if binary not found — a missing binary means the environment is misconfigured.
 - **No skips.** Tests must never use `skipif` or `pytest.skip()`. See CODING_STANDARDS.md.
@@ -42,16 +80,16 @@ OpenCode  →  ACP Proxy (localhost)  →  copilot-language-server  →  Copilot
 They document the binding decisions and the empirical evidence behind them —
 particularly the failure modes that motivated each decision.
 
-| ADR | Decision |
-|---|---|
-| [ADR-001](adrs/001-acp-proxy-architecture.md) | Route OpenCode through ACP proxy (why this architecture, what was rejected) |
-| [ADR-002](adrs/002-session-per-conversation.md) | Session-per-conversation via first-message hash (why sessions are keyed this way) |
-| [ADR-003](adrs/003-system-prompt-injection.md) | System prompt injection as primary control surface (why and how it works) |
-| [ADR-004](adrs/004-last-user-message-extraction.md) | Extract only the last user message (why full history replay causes duplication) |
-| [ADR-005](adrs/005-fail-loud-testing.md) | Fail-loud testing — no skips (why skips are banned, what they masked) |
-| [ADR-006](adrs/006-binary-discovery.md) | Binary discovery — IntelliJ IDEA 2025.3 only (why version specificity, what wrong-binary failure looked like) |
-| [ADR-007](adrs/007-tool-ownership.md) | The ACP server owns tools — do not inject or override (protocol constraint, empirical evidence) |
-| [ADR-008](adrs/008-proxy-as-substrate.md) | Proxy as substrate — installable command, cwd as workspace |
+| ADR                                                 | Decision                                                                                                      |
+|-----------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| [ADR-001](adrs/001-acp-proxy-architecture.md)       | Route OpenCode through ACP proxy (why this architecture, what was rejected)                                   |
+| [ADR-002](adrs/002-session-per-conversation.md)     | Session-per-conversation via first-message hash (why sessions are keyed this way)                             |
+| [ADR-003](adrs/003-system-prompt-injection.md)      | System prompt injection as primary control surface (why and how it works)                                     |
+| [ADR-004](adrs/004-last-user-message-extraction.md) | Extract only the last user message (why full history replay causes duplication)                               |
+| [ADR-005](adrs/005-fail-loud-testing.md)            | Fail-loud testing — no skips (why skips are banned, what they masked)                                         |
+| [ADR-006](adrs/006-binary-discovery.md)             | Binary discovery — IntelliJ IDEA 2025.3 only (why version specificity, what wrong-binary failure looked like) |
+| [ADR-007](adrs/007-tool-ownership.md)               | The ACP server owns tools — do not inject or override (protocol constraint, empirical evidence)               |
+| [ADR-008](adrs/008-proxy-as-substrate.md)           | Proxy as substrate — installable command, cwd as workspace                                                    |
 
 The ADRs explain the *why* behind the module ownership rules in the table
 above. A change that contradicts an accepted ADR requires a new ADR

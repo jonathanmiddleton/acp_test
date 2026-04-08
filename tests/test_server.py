@@ -487,6 +487,137 @@ async def test_multi_turn_reuses_session_after_collision(client, fake_client):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Prompt timeout error handling
+# ---------------------------------------------------------------------------
+
+
+class TimeoutFakeAcpClient(FakeAcpClient):
+    """A FakeAcpClient whose prompt() raises PromptTimeout."""
+
+    async def prompt(
+        self, session_id: str, messages: list[dict[str, Any]], **kwargs: Any
+    ) -> AsyncIterator[dict[str, Any]]:
+        from acp_proxy.client import PromptTimeout
+
+        self.last_prompt_messages = messages
+        raise PromptTimeout(session_id, timeout_s=120.0, partial_text="partial")
+        # Make this a generator
+        yield  # pragma: no cover
+
+
+class SessionFailFakeAcpClient(FakeAcpClient):
+    """A FakeAcpClient whose create_session() raises."""
+
+    async def create_session(self, cwd: str, model_id: str | None = None) -> str:
+        raise RuntimeError("ACP server not responding")
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_prompt_timeout_returns_504():
+    """A prompt timeout in non-streaming mode returns a 504 with structured error."""
+    fake = TimeoutFakeAcpClient()
+    app = create_app(fake, "/tmp/test")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": False,
+            },
+        )
+    assert resp.status_code == 504
+    data = resp.json()
+    assert data["error"]["code"] == "prompt_timeout"
+    assert "timed out" in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_streaming_prompt_timeout_emits_error_event():
+    """A prompt timeout in streaming mode emits an error SSE event."""
+
+    class StreamingTimeoutClient(FakeAcpClient):
+        """Yields a few chunks then raises PromptTimeout."""
+
+        async def prompt(
+            self, session_id: str, messages: list[dict[str, Any]], **kwargs: Any
+        ) -> AsyncIterator[dict[str, Any]]:
+            from acp_proxy.client import PromptTimeout
+
+            self.last_prompt_messages = messages
+            yield {
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": "partial "},
+            }
+            yield {
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": "response"},
+            }
+            raise PromptTimeout(
+                session_id, timeout_s=120.0, partial_text="partial response"
+            )
+
+    fake = StreamingTimeoutClient()
+    app = create_app(fake, "/tmp/test")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": True,
+            },
+        )
+    assert resp.status_code == 200  # SSE headers already sent
+    body = resp.text
+
+    # Should contain content chunks before the error
+    assert "partial " in body
+    assert "response" in body
+
+    # Should contain an error event
+    events = []
+    for line in body.split("\n"):
+        if line.startswith("data: ") and line != "data: [DONE]":
+            events.append(json.loads(line[6:]))
+
+    error_events = [e for e in events if "error" in e]
+    assert len(error_events) == 1
+    assert error_events[0]["error"]["code"] == "prompt_timeout"
+
+    # Should end with [DONE]
+    assert "data: [DONE]" in body
+
+
+@pytest.mark.asyncio
+async def test_session_creation_failure_returns_502():
+    """A session creation failure returns a 502 with structured error."""
+    fake = SessionFailFakeAcpClient()
+    app = create_app(fake, "/tmp/test")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4.1",
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": False,
+            },
+        )
+    assert resp.status_code == 502
+    data = resp.json()
+    assert data["error"]["code"] == "acp_session_error"
+    assert "ACP server not responding" in data["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# _map_stop_reason
+# ---------------------------------------------------------------------------
+
+
 class TestMapStopReason:
     """All ACP stop reasons map to OpenAI finish reasons."""
 

@@ -12,7 +12,7 @@ Usage:
                       Auto-discovered if omitted (IntelliJ 2025.3 plugin only).
     --port PORT       Port to listen on (default: 8765)
     --cwd PATH        Working directory for ACP sessions (default: current dir)
-    --log-level LEVEL Console logging level (default: INFO)
+    --log-level LEVEL Console logging level (default: DEBUG)
     --log-file PATH   Log file path (default: logs/proxy.log)
     --system-prompt   Path to system prompt file injected into each new session.
 """
@@ -164,9 +164,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--log-level",
-        default="INFO",
+        default="DEBUG",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Console logging level (default: INFO). File always logs DEBUG.",
+        help="Console logging level (default: DEBUG during development). "
+        "File always logs DEBUG.",
     )
     parser.add_argument(
         "--log-file",

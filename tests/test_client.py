@@ -604,3 +604,182 @@ class TestTrySetModel:
 
         with pytest.raises(AcpError, match="Server exploded"):
             await client._try_set_model("s1", "gpt-4o")
+
+
+# ---------------------------------------------------------------------------
+# Prompt timeout (prompt-level deadline enforcement)
+# ---------------------------------------------------------------------------
+
+
+class TestPromptTimeout:
+    """Prompt-level timeout enforces a deadline on session/prompt.
+
+    The prompt() method must raise PromptTimeout if the ACP server does
+    not complete within the configured deadline.  This prevents a hung
+    language server from blocking the HTTP connection indefinitely.
+    """
+
+    @pytest.mark.asyncio
+    async def test_timeout_raises_prompt_timeout(self):
+        """A prompt that exceeds the deadline raises PromptTimeout."""
+        from acp_proxy.client import PromptTimeout
+
+        client = AcpClient.__new__(AcpClient)
+        client._sessions = {"s1": SessionState(session_id="s1")}
+        client._update_queues = {}
+
+        # Transport that never responds — simulates a hung server
+        async def never_respond(method, params):
+            await asyncio.sleep(999)
+
+        transport = MagicMock()
+        transport.send_request = never_respond
+        client._transport = transport
+
+        with pytest.raises(PromptTimeout) as exc_info:
+            async for _ in client.prompt(
+                "s1",
+                [{"role": "user", "content": "hello"}],
+                timeout_s=0.2,
+            ):
+                pass
+
+        assert exc_info.value.session_id == "s1"
+        assert exc_info.value.timeout_s == 0.2
+
+    @pytest.mark.asyncio
+    async def test_timeout_includes_partial_text(self):
+        """Partial text collected before the timeout is preserved in the exception."""
+        from acp_proxy.client import PromptTimeout
+
+        client = AcpClient.__new__(AcpClient)
+        client._sessions = {"s1": SessionState(session_id="s1")}
+        client._update_queues = {}
+
+        async def slow_respond(method, params):
+            # Wait long enough that chunks are delivered, then hang
+            await asyncio.sleep(999)
+
+        transport = MagicMock()
+        transport.send_request = slow_respond
+        client._transport = transport
+
+        async def push_chunks():
+            """Push chunks into the queue shortly after it's created."""
+            # Wait for prompt() to create the queue
+            for _ in range(50):
+                if "s1" in client._update_queues:
+                    break
+                await asyncio.sleep(0.01)
+            q = client._update_queues.get("s1")
+            if q:
+                q.put_nowait(
+                    {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "partial "},
+                    }
+                )
+                q.put_nowait(
+                    {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "response"},
+                    }
+                )
+
+        # Start pushing chunks concurrently
+        push_task = asyncio.create_task(push_chunks())
+
+        with pytest.raises(PromptTimeout) as exc_info:
+            async for _ in client.prompt(
+                "s1",
+                [{"role": "user", "content": "hello"}],
+                timeout_s=0.5,
+            ):
+                pass
+
+        await push_task
+        assert exc_info.value.partial_text == "partial response"
+
+    @pytest.mark.asyncio
+    async def test_normal_completion_within_timeout(self):
+        """A prompt that completes before the deadline works normally."""
+        client = AcpClient.__new__(AcpClient)
+        client._sessions = {"s1": SessionState(session_id="s1")}
+        client._update_queues = {}
+
+        async def fast_respond(method, params):
+            # Respond quickly
+            await asyncio.sleep(0.05)
+            return {"stopReason": "end_turn"}
+
+        transport = MagicMock()
+        transport.send_request = fast_respond
+        transport.on_notification = MagicMock()
+        transport.on_request = MagicMock()
+        client._transport = transport
+
+        # Push an update and then let the prompt task complete
+        async def push_update():
+            await asyncio.sleep(0.01)
+            q = client._update_queues.get("s1")
+            if q:
+                q.put_nowait(
+                    {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "hello"},
+                    }
+                )
+
+        asyncio.create_task(push_update())
+
+        results = []
+        async for update in client.prompt(
+            "s1",
+            [{"role": "user", "content": "hi"}],
+            timeout_s=5.0,
+        ):
+            results.append(update)
+
+        # Should have the chunk + done sentinel
+        assert any(r.get("done") for r in results)
+
+    @pytest.mark.asyncio
+    async def test_unknown_session_raises_value_error(self):
+        """Prompting an unknown session raises ValueError, not timeout."""
+        client = AcpClient.__new__(AcpClient)
+        client._sessions = {}
+        client._update_queues = {}
+
+        with pytest.raises(ValueError, match="Unknown session"):
+            async for _ in client.prompt(
+                "nonexistent",
+                [{"role": "user", "content": "hello"}],
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_queue_cleanup_after_timeout(self):
+        """The update queue is removed after a timeout to prevent leaks."""
+        from acp_proxy.client import PromptTimeout
+
+        client = AcpClient.__new__(AcpClient)
+        client._sessions = {"s1": SessionState(session_id="s1")}
+        client._update_queues = {}
+
+        async def never_respond(method, params):
+            await asyncio.sleep(999)
+
+        transport = MagicMock()
+        transport.send_request = never_respond
+        client._transport = transport
+
+        with pytest.raises(PromptTimeout):
+            async for _ in client.prompt(
+                "s1",
+                [{"role": "user", "content": "hello"}],
+                timeout_s=0.1,
+            ):
+                pass
+
+        # Queue should be cleaned up
+        assert "s1" not in client._update_queues
