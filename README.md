@@ -89,25 +89,55 @@ python -m pytest tests/ -v
 
 Integration tests require the `copilot-language-server` binary to be available. They **fail** (not skip) if the binary is not found — see [ADR-005](adrs/005-fail-loud-testing.md). Run unit tests only with: `python -m pytest tests/test_transport.py tests/test_server.py tests/test_discovery.py -v`
 
-## Proxy Configuration
+## Configuration
 
-In corporate environments, the `copilot-language-server` needs proxy
-settings to reach `api.github.com`. Rather than setting global environment
-variables, create a config file at `~/.acp_proxy/config.json`:
+On first run, the proxy creates a default config at `~/.acp_proxy/config.json`:
 
 ```json
 {
-  "https_proxy": "http://your-proxy:port",
-  "http_proxy": "http://your-proxy:port",
-  "no_proxy": "localhost,127.0.0.1"
+  "_doc": "ACP Proxy configuration. See README.md for details.",
+  "https_proxy": "",
+  "http_proxy": "",
+  "no_proxy": "localhost,127.0.0.1",
+  "context_files": ["AGENTS.md", "CLAUDE.md", "COPILOT-INSTRUCTIONS.md"]
 }
 ```
 
-The proxy reads this at startup and injects the settings into the language
-server subprocess environment only — the global environment is not modified.
+### Proxy settings
 
-Environment variables (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`) take
-precedence over config file values if both are set.
+In corporate environments, the `copilot-language-server` needs proxy
+settings to reach `api.github.com`. Edit `https_proxy` and `http_proxy`
+with your corporate proxy URL (e.g., `"http://proxy-host:port"`).
+
+The proxy injects these into the language server subprocess environment
+only — the global environment is not modified. Shell environment variables
+(`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`) take precedence over config file
+values if both are set.
+
+### Context injection
+
+The proxy automatically injects workspace markdown files into the system
+prompt for each ACP session. The `context_files` list controls which files
+are scanned in the workspace (`--cwd`). Files that don't exist are silently
+skipped — a generous default list works across different repos.
+
+To customize, edit `context_files` in the config:
+
+```json
+{
+  "context_files": ["AGENTS.md", "CODING_STANDARDS.md", "docs/ARCHITECTURE.md"]
+}
+```
+
+To disable auto-injection entirely: `"context_files": []`
+
+If `--system-prompt` is also provided, the explicit prompt comes first
+(positional priority) and context files are appended after a separator.
+
+The proxy logs estimated token counts for the composed prompt at startup
+and per request. These are estimates (~4 chars/token) — actual usage is
+higher because Copilot's backend injects its own system prompt, safety
+policies, and tool definitions that we cannot observe.
 
 ## Options
 

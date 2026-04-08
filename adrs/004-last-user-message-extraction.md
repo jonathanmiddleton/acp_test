@@ -57,10 +57,18 @@ Two static helpers in `client.py`:
 - **Eliminates the duplication root cause.** Rather than trying to diff the
   replayed history against what the session has seen, which would be complex
   and fragile, we simply send only what's new.
-- **OpenCode's system prompt is replaced.** OpenCode's ~15K char system prompt
-  (describing its own tools) conflicts with the ACP server's tool definitions
-  (see ADR-003, ADR-007). Stripping it and replacing with an injected system
-  prompt resolves the two-agent-runtime collision.
+- **OpenCode's system prompt is stripped for three reasons:**
+  1. **Collision.** It describes OpenCode's own tools and capabilities, which
+     conflict with the ACP server's tool definitions (see ADR-003, ADR-007,
+     ADR-010).
+  2. **Invalid information.** The prompt describes an environment (OpenCode's
+     native tool surface, direct API access, specific behavioral contracts)
+     that does not exist when the model operates through the ACP agent
+     runtime. Injecting it would actively mislead the model.
+  3. **Size.** At ~7K+ tokens, it consumes context window that is better
+     used for project-specific information. Through Copilot's backend —
+     which injects its own system prompt, safety policies, and tool
+     definitions — the overhead is compounded.
 
 ## Consequences
 

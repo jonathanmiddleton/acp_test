@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .client import AcpClient
+from .config import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,10 @@ def create_app(
     # (beyond the system prompt injection).  Used to decide whether
     # a single-message request hitting an existing key is a collision.
     _active_sessions: set[str] = set()
+    # Estimated token accumulation per session.  These are estimates —
+    # actual tokenization depends on the model's tokenizer, and Copilot's
+    # backend injects additional context we cannot observe.
+    _session_tokens: dict[str, dict[str, int]] = {}
 
     async def _get_session(model_id: str, messages: list[dict[str, Any]]) -> str:
         """Get or create an ACP session for this conversation.
@@ -143,14 +148,21 @@ def create_app(
                 first_msg[:60].replace("\n", " "),
             )
 
+            # Initialize token tracking for this session
+            _session_tokens[session_id] = {"prompt": 0, "completion": 0}
+
             # Inject system prompt as the first turn if configured
             if system_prompt and session_id not in _initialized_sessions:
                 _initialized_sessions.add(session_id)
+                prompt_tokens = estimate_tokens(system_prompt)
                 logger.info(
-                    "Injecting system prompt into session %s (%d chars)",
+                    "Injecting system prompt into session %s "
+                    "(%d chars, ~%d est. tokens)",
                     session_id[:8],
                     len(system_prompt),
+                    prompt_tokens,
                 )
+                _session_tokens[session_id]["prompt"] += prompt_tokens
                 # Send and drain — we don't return this response to the caller
                 async for _ in acp_client.prompt(
                     session_id,
@@ -253,7 +265,13 @@ def create_app(
         if request.stream:
             return StreamingResponse(
                 _stream_response(
-                    acp_client, session_id, messages, completion_id, created, model_id
+                    acp_client,
+                    session_id,
+                    messages,
+                    completion_id,
+                    created,
+                    model_id,
+                    _session_tokens,
                 ),
                 media_type="text/event-stream",
                 headers={
@@ -264,7 +282,13 @@ def create_app(
             )
         else:
             return await _non_streaming_response(
-                acp_client, session_id, messages, completion_id, created, model_id
+                acp_client,
+                session_id,
+                messages,
+                completion_id,
+                created,
+                model_id,
+                _session_tokens,
             )
 
     @app.get("/health")
@@ -281,10 +305,15 @@ async def _non_streaming_response(
     completion_id: str,
     created: int,
     model_id: str,
+    session_tokens: dict[str, dict[str, int]],
 ) -> JSONResponse:
     """Collect the full response and return it."""
     full_text = ""
     stop_reason = "stop"
+
+    # Estimate prompt tokens from the user message we're sending
+    last_msg = AcpClient.extract_last_user_message(messages)
+    est_prompt = estimate_tokens(last_msg)
 
     async for update in client.prompt(session_id, messages):
         if update.get("done"):
@@ -297,6 +326,25 @@ async def _non_streaming_response(
             if content.get("type") == "text":
                 full_text += content.get("text", "")
 
+    est_completion = estimate_tokens(full_text)
+
+    # Accumulate session-level estimates
+    if session_id in session_tokens:
+        session_tokens[session_id]["prompt"] += est_prompt
+        session_tokens[session_id]["completion"] += est_completion
+        totals = session_tokens[session_id]
+        logger.info(
+            "Token estimate (session %s): prompt ~%d, completion ~%d | "
+            "session total: prompt ~%d, completion ~%d, combined ~%d "
+            "(estimates only — actual usage is higher due to provider injection)",
+            session_id[:8],
+            est_prompt,
+            est_completion,
+            totals["prompt"],
+            totals["completion"],
+            totals["prompt"] + totals["completion"],
+        )
+
     response = ChatCompletionResponse(
         id=completion_id,
         created=created,
@@ -308,9 +356,9 @@ async def _non_streaming_response(
             )
         ],
         usage=UsageInfo(
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
+            prompt_tokens=est_prompt,
+            completion_tokens=est_completion,
+            total_tokens=est_prompt + est_completion,
         ),
     )
     return JSONResponse(response.model_dump())
@@ -323,13 +371,39 @@ async def _stream_response(
     completion_id: str,
     created: int,
     model_id: str,
+    session_tokens: dict[str, dict[str, int]],
 ) -> AsyncIterator[str]:
     """Stream SSE events in OpenAI format."""
+
+    # Estimate prompt tokens from the user message we're sending
+    last_msg = AcpClient.extract_last_user_message(messages)
+    est_prompt = estimate_tokens(last_msg)
+    response_chars = 0
 
     async for update in client.prompt(session_id, messages):
         if update.get("done"):
             sr = update.get("stopReason", "end_turn")
             finish_reason = _map_stop_reason(sr)
+
+            # Log token estimates at end of stream
+            est_completion = estimate_tokens("x" * response_chars)
+            if session_id in session_tokens:
+                session_tokens[session_id]["prompt"] += est_prompt
+                session_tokens[session_id]["completion"] += est_completion
+                totals = session_tokens[session_id]
+                logger.info(
+                    "Token estimate (session %s): prompt ~%d, completion ~%d | "
+                    "session total: prompt ~%d, completion ~%d, combined ~%d "
+                    "(estimates only — actual usage is higher due to "
+                    "provider injection)",
+                    session_id[:8],
+                    est_prompt,
+                    est_completion,
+                    totals["prompt"],
+                    totals["completion"],
+                    totals["prompt"] + totals["completion"],
+                )
+
             # Send final chunk with finish_reason
             chunk = {
                 "id": completion_id,
@@ -354,6 +428,7 @@ async def _stream_response(
             if content.get("type") == "text":
                 text = content.get("text", "")
                 if text:
+                    response_chars += len(text)
                     chunk = {
                         "id": completion_id,
                         "object": "chat.completion.chunk",

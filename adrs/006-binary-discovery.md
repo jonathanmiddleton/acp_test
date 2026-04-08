@@ -34,16 +34,26 @@ break on every other machine.
 
 `discovery.py` is the single source of truth for binary resolution. It:
 
-1. **Only accepts IntelliJ IDEA 2025.3 plugin binary.** The expected path
-   pattern is fully specified per platform:
-   - macOS: `~/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/github-copilot-intellij/copilot-agent/native/darwin-arm64/copilot-language-server`
-   - Windows: `%APPDATA%/JetBrains/IntelliJIdea2025.3/plugins/github-copilot-intellij/copilot-agent/native/win-x64/copilot-language-server.exe` (provisional — needs verification)
-2. **Auto-discovers via `ps`.** Scans running processes for
-   `copilot-language-server`. Each candidate's full path is validated against
-   the expected IntelliJ 2025.3 pattern. Incompatible binaries (other IDEs,
-   other versions) are rejected with a warning log.
-3. **Falls back to filesystem glob.** If no matching process is found, searches
-   the JetBrains plugin directory for the expected path.
+1. **Validates three properties for compatibility.** A binary path must:
+   - Be under the current user's home directory.
+   - Contain `IntelliJIdea2025.3` as a path component.
+   - Have the correct binary filename (`copilot-language-server` on Unix,
+     `copilot-language-server.exe` on Windows).
+
+   No assumptions are made about the intermediate directory structure
+   between the home directory and the IDE directory. Deployment layouts
+   vary across environments — the Windows target uses
+   `.../copilot-agent/bin/copilot-language-server` (no `native/` or
+   architecture directory), while macOS uses
+   `.../copilot-agent/native/darwin-arm64/copilot-language-server`.
+
+2. **Auto-discovers from running processes.** On Unix, scans `ps` output.
+   On Windows, uses PowerShell (`Get-Process`) with a wmic fallback. Each
+   candidate's full path is validated against the three-property check.
+   Incompatible binaries (other IDEs, other versions, other users) are
+   rejected with a warning log.
+3. **Falls back to filesystem lookup.** If no matching process is found,
+   checks the expected JetBrains plugin directory on disk.
 4. **Explicit `--binary` override.** The CLI accepts an explicit path that
    bypasses discovery, for environments where auto-discovery fails.
 
@@ -73,8 +83,19 @@ duplicated discovery logic.
   discovery will fail until the pattern is updated. This is intentional — the
   proxy should be explicitly validated against new versions before accepting
   them.
-- **Windows path is provisional.** The Windows pattern is declared but not
-  empirically verified. First use on Windows will require path validation.
-- **IDE must be running for `ps` discovery.** If JetBrains is not running,
-  `ps` finds nothing and discovery falls back to filesystem glob. The user
-  must have JetBrains installed (even if not running) for glob to work.
+- **Filesystem fallback assumes a specific directory structure.** The
+  `find_binary_from_jetbrains()` path uses the full expected layout
+  (including `native/{arch}/`). If the actual layout differs (as on the
+  Windows target), the filesystem fallback won't find the binary. Process
+  discovery will still work since it uses the relaxed three-property check.
+  The `--binary` flag is the escape hatch.
+- **IDE must be running for process discovery.** If JetBrains is not running,
+  process scanning finds nothing and discovery falls back to filesystem
+  lookup. The user must have JetBrains installed (even if not running) for
+  filesystem lookup to work.
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| 2026-04-07 | Relaxed path matching from exact full-path regex to three-property check (home dir, IDE dir component, binary name). Added Windows process discovery via PowerShell + wmic fallback. Confirmed Windows target uses a different directory layout (`bin/` instead of `native/{arch}/`). |

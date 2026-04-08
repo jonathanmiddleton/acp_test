@@ -47,12 +47,40 @@ def config_path() -> str:
     return os.path.join(config_dir(), _CONFIG_FILE)
 
 
+def ensure_default_config() -> str:
+    """Create the default config file if it doesn't exist.
+
+    Returns the path to the config file.  If the file already exists,
+    it is not modified.
+    """
+    path = config_path()
+    if os.path.isfile(path):
+        return path
+
+    directory = config_dir()
+    try:
+        os.makedirs(directory, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(_DEFAULT_CONFIG, f, indent=2)
+            f.write("\n")
+        logger.info("Created default config at %s", path)
+    except OSError as e:
+        logger.warning("Could not create default config at %s: %s", path, e)
+
+    return path
+
+
 def load_config() -> dict[str, Any]:
     """Load user configuration from disk.
 
-    Returns an empty dict if the config file does not exist.
-    Logs a warning and returns an empty dict if the file is malformed.
+    On first run, creates a default config file at ``~/.acp_proxy/config.json``
+    with empty proxy fields and the default context file list.
+
+    Returns an empty dict if the config file cannot be read.
+    Logs a warning if the file is malformed.
     """
+    ensure_default_config()
+
     path = config_path()
     if not os.path.isfile(path):
         logger.debug("No config file at %s", path)
@@ -118,7 +146,16 @@ def build_subprocess_env(cfg: dict[str, Any] | None = None) -> dict[str, str]:
 # Context file discovery and system prompt composition (ADR-011)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_CONTEXT_FILES = ["AGENTS.md"]
+_DEFAULT_CONTEXT_FILES = ["AGENTS.md", "CLAUDE.md", "COPILOT-INSTRUCTIONS.md"]
+
+# Default config written on first run if no config file exists.
+_DEFAULT_CONFIG: dict[str, Any] = {
+    "_doc": "ACP Proxy configuration. See README.md for details.",
+    "https_proxy": "",
+    "http_proxy": "",
+    "no_proxy": "localhost,127.0.0.1",
+    "context_files": list(_DEFAULT_CONTEXT_FILES),
+}
 
 # Approximate tokens per character.  GPT tokenizers average ~4 chars/token
 # for English prose.  This is an estimate — actual tokenization depends on

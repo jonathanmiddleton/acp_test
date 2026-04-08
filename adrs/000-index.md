@@ -9,6 +9,8 @@ See [GUIDE.md](GUIDE.md) for how and when to write ADRs.
 - [ADR-003: System Prompt Injection as Primary Control Surface](003-system-prompt-injection.md)
 - [ADR-004: Extract Only the Last User Message for ACP Sessions](004-last-user-message-extraction.md)
 - [ADR-007: The ACP Server Owns Tools — Do Not Inject or Override](007-tool-ownership.md)
+- [ADR-010: Two-Agent-Runtime Collision — The ACP Path Interposes a Full Agent Loop](010-two-agent-runtime-collision.md)
+- [ADR-011: Context Injection — Proxy Responsibilities and Consumer Boundary](011-context-injection-boundary.md)
 
 ## Session and conversation management
 

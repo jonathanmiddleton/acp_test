@@ -31,7 +31,12 @@ import sys
 import uvicorn
 
 from .client import AcpClient
-from .config import build_subprocess_env, config_path, load_config
+from .config import (
+    build_subprocess_env,
+    compose_system_prompt,
+    config_path,
+    load_config,
+)
 from .discovery import find_binary
 from .server import create_app
 
@@ -188,14 +193,14 @@ def main() -> None:
         )
         sys.exit(1)
 
-    system_prompt = None
+    explicit_prompt = None
     if args.system_prompt:
         with open(args.system_prompt) as f:
-            system_prompt = f.read().strip()
+            explicit_prompt = f.read().strip()
         logger.info(
-            "Loaded system prompt from %s (%d chars)",
+            "Loaded explicit system prompt from %s (%d chars)",
             args.system_prompt,
-            len(system_prompt),
+            len(explicit_prompt),
         )
 
     logger.info("Using binary: %s", binary)
@@ -206,6 +211,15 @@ def main() -> None:
     cfg = load_config()
     subprocess_env = build_subprocess_env(cfg)
     logger.info("Config file: %s", config_path())
+
+    # Compose system prompt from explicit file + workspace context files
+    system_prompt = compose_system_prompt(explicit_prompt, args.cwd, cfg)
+    if system_prompt:
+        logger.info("System prompt ready (%d chars)", len(system_prompt))
+    else:
+        logger.info(
+            "No system prompt configured (no --system-prompt and no context files found)"
+        )
 
     asyncio.run(
         run(
