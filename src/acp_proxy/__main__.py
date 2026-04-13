@@ -8,25 +8,29 @@ Usage:
     becomes the ACP workspace — the copilot-language-server scans it and scopes
     file operations to it.
 
-    --binary PATH     Path to copilot-language-server binary.
-                      Auto-discovered if omitted (IntelliJ 2025.3 plugin only).
-    --port PORT       Port to listen on (default: 8765)
-    --cwd PATH        Working directory for ACP sessions (default: current dir)
-    --log-level LEVEL Console logging level (default: DEBUG)
-    --log-file PATH   Log file path (default: logs/proxy.log)
-    --system-prompt   Path to system prompt file injected into each new session.
+    --binary PATH       Path to copilot-language-server binary.
+                        Auto-discovered if omitted (IntelliJ 2025.3 plugin only).
+    --port PORT         Port to listen on (default: 8765). Use 0 for ephemeral.
+    --cwd PATH          Working directory for ACP sessions (default: current dir)
+    --log-level LEVEL   Console logging level (default: DEBUG)
+    --log-file PATH     Log file path (default: logs/proxy.log)
+    --system-prompt     Path to system prompt file injected into each new session.
+    --metadata-file     Write JSON metadata (port, pid, status) after startup.
+    --context-files     Comma-separated context filenames, or 'none' to disable.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import logging.handlers
 import os
 import platform
 import signal
 import sys
+import tempfile
 
 import uvicorn
 
@@ -78,12 +82,53 @@ def _configure_logging(console_level: str, log_file: str) -> None:
         uv_logger.propagate = True
 
 
+def _write_metadata_file(path: str, port: int) -> None:
+    """Write a JSON metadata file with process info and readiness status.
+
+    This file doubles as a readiness signal — its existence means the
+    server is bound and accepting connections.
+
+    Uses write-to-temp + rename for atomic creation so consumers never
+    observe a partially-written file.
+    """
+    metadata = {
+        "pid": os.getpid(),
+        "port": port,
+        "host": "127.0.0.1",
+        "status": "ready",
+    }
+    metadata_dir = os.path.dirname(path) or "."
+    os.makedirs(metadata_dir, exist_ok=True)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=metadata_dir, suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(metadata, f)
+        os.rename(tmp_path, path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
+    logger.info("Wrote metadata file: %s", path)
+
+
+def _remove_metadata_file(path: str) -> None:
+    """Remove the metadata file if it exists. Log on failure but do not raise."""
+    try:
+        os.remove(path)
+        logger.debug("Removed metadata file: %s", path)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        logger.warning("Failed to remove metadata file %s: %s", path, e)
+
+
 async def run(
     binary: str,
     port: int,
     cwd: str,
     system_prompt: str | None = None,
     subprocess_env: dict[str, str] | None = None,
+    metadata_file: str | None = None,
 ) -> None:
     """Start the ACP client and HTTP server."""
     client = AcpClient(binary)
@@ -122,25 +167,64 @@ async def run(
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, _signal_handler)
 
-    # Run server in background task
-    server_task = asyncio.create_task(server.serve())
+    # --- Phase 1a: explicit startup to discover the actual bound port ---
+    # Replicate the setup that uvicorn.Server._serve() performs before
+    # calling startup().  This is an internal contract of uvicorn 0.44.0
+    # (see Server._serve in uvicorn/server.py).  Pin uvicorn to ~=0.44.0
+    # in pyproject.toml — this sequence may break on major version bumps.
+    if not config.loaded:
+        config.load()
+    server.lifespan = config.lifespan_class(config)
 
-    logger.info("Proxy listening on http://127.0.0.1:%d", port)
-    logger.info("Models endpoint: http://127.0.0.1:%d/v1/models", port)
-    logger.info("Completions endpoint: http://127.0.0.1:%d/v1/chat/completions", port)
+    # NOTE: uvicorn calls sys.exit(1) inside startup() if the socket bind
+    # fails (e.g. port already in use).  This bypasses our cleanup code.
+    # There is no clean way to intercept this from outside uvicorn today.
+    await server.startup()
 
-    # Wait for shutdown signal or server to stop
-    done, _ = await asyncio.wait(
-        [server_task, asyncio.create_task(shutdown_event.wait())],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
+    # Discover the actual port (critical for --port 0 / ephemeral assignment)
+    if server.servers and server.servers[0].sockets:
+        actual_port = server.servers[0].sockets[0].getsockname()[1]
+    else:
+        logger.error(
+            "Server started but no listening sockets found. server.servers=%r",
+            getattr(server, "servers", None),
+        )
+        await client.stop()
+        raise RuntimeError("Server startup produced no listening sockets")
 
-    # Clean up
-    if not server_task.done():
-        server.should_exit = True
-        await server_task
-    await client.stop()
-    logger.info("Proxy stopped.")
+    try:
+        # --- Phase 1b: write metadata file before main_loop (readiness signal) ---
+        if metadata_file is not None:
+            _write_metadata_file(metadata_file, actual_port)
+
+        # Run the server main loop in a background task
+        server_task = asyncio.create_task(server.main_loop())
+
+        logger.info("Proxy listening on http://127.0.0.1:%d", actual_port)
+        logger.info("Models endpoint: http://127.0.0.1:%d/v1/models", actual_port)
+        logger.info(
+            "Completions endpoint: http://127.0.0.1:%d/v1/chat/completions",
+            actual_port,
+        )
+
+        # Wait for shutdown signal or server to stop
+        done, pending = await asyncio.wait(
+            [server_task, asyncio.create_task(shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+
+        # Clean up
+        if not server_task.done():
+            server.should_exit = True
+            await server_task
+    finally:
+        await server.shutdown()
+        if metadata_file is not None:
+            _remove_metadata_file(metadata_file)
+        await client.stop()
+        logger.info("Proxy stopped.")
 
 
 def main() -> None:
@@ -155,7 +239,7 @@ def main() -> None:
         "--port",
         type=int,
         default=8765,
-        help="Port to listen on (default: 8765)",
+        help="Port to listen on (default: 8765). Use 0 for ephemeral port assignment.",
     )
     parser.add_argument(
         "--cwd",
@@ -177,6 +261,15 @@ def main() -> None:
     parser.add_argument(
         "--system-prompt",
         help="Path to a file containing a system prompt to inject into each new session.",
+    )
+    parser.add_argument(
+        "--metadata-file",
+        help="Write a JSON metadata file at this path after startup (port, pid, status).",
+    )
+    parser.add_argument(
+        "--context-files",
+        help="Comma-separated list of context filenames to inject, or 'none' to disable. "
+        "Default: AGENTS.md,CLAUDE.md,COPILOT-INSTRUCTIONS.md",
     )
     args = parser.parse_args()
 
@@ -213,6 +306,17 @@ def main() -> None:
     subprocess_env = build_subprocess_env(cfg)
     logger.info("Config file: %s", config_path())
 
+    # --- Phase 1c: CLI override for context files ---
+    if args.context_files is not None:
+        if args.context_files == "none":
+            cfg["context_files"] = []
+            logger.info("Context files disabled via --context-files none")
+        else:
+            cfg["context_files"] = [
+                f.strip() for f in args.context_files.split(",") if f.strip()
+            ]
+            logger.info("Context files overridden via CLI: %s", cfg["context_files"])
+
     # Compose system prompt from explicit file + workspace context files
     system_prompt = compose_system_prompt(explicit_prompt, args.cwd, cfg)
     if system_prompt:
@@ -229,6 +333,7 @@ def main() -> None:
             args.cwd,
             system_prompt=system_prompt,
             subprocess_env=subprocess_env,
+            metadata_file=args.metadata_file,
         )
     )
 
