@@ -2,7 +2,7 @@
 Binary discovery for copilot-language-server.
 
 The only supported binary is the one bundled with the GitHub Copilot plugin
-for IntelliJ IDEA 2025.3. Other versions (older IntelliJ, other JetBrains
+for IntelliJ IDEA 2025.3 or 2026.1. Other versions (older IntelliJ, other JetBrains
 IDEs, standalone installs, Homebrew, npm) are known to be incompatible with
 the ACP protocol surface this proxy requires.
 
@@ -23,8 +23,8 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-# The IDE directory name that identifies the only compatible IntelliJ version.
-_IDE_DIR = "IntelliJIdea2025.3"
+# The IDE directory names that identify compatible IntelliJ versions.
+_IDE_DIRS = ("IntelliJIdea2025.3", "IntelliJIdea2026.1")
 
 _PLUGIN_SUFFIX_PARTS = (
     "plugins",
@@ -39,7 +39,7 @@ _PLUGIN_SUFFIX_PARTS = (
 def _platform_config() -> dict[str, str]:
     """Return platform-specific discovery configuration.
 
-    Returns a dict with keys: base, arch, binary_name, ide_dir, home.
+    Returns a dict with keys: base, arch, binary_name, home.
     """
     system = platform.system()
     home = os.path.expanduser("~")
@@ -50,7 +50,6 @@ def _platform_config() -> dict[str, str]:
             "base": os.path.join(home, "Library/Application Support/JetBrains"),
             "arch": "darwin-arm64" if platform.machine() == "arm64" else "darwin-x64",
             "binary_name": "copilot-language-server",
-            "ide_dir": _IDE_DIR,
         }
     elif system == "Windows":
         # Windows uses %APPDATA% (roaming profile) for JetBrains config.
@@ -61,7 +60,6 @@ def _platform_config() -> dict[str, str]:
             "base": os.path.join(appdata, "JetBrains"),
             "arch": "win32-x64",
             "binary_name": "copilot-language-server.exe",
-            "ide_dir": _IDE_DIR,
         }
     else:
         # Linux — included for completeness but not a current target
@@ -70,22 +68,21 @@ def _platform_config() -> dict[str, str]:
             "base": os.path.join(home, ".local/share/JetBrains"),
             "arch": "linux-x64",
             "binary_name": "copilot-language-server",
-            "ide_dir": _IDE_DIR,
         }
 
 
-def _compatible_path_pattern() -> str:
-    """Return the expected full path for the compatible binary on this platform."""
+def _compatible_path_patterns() -> list[str]:
+    """Return the expected full paths for the compatible binaries on this platform."""
     cfg = _platform_config()
     suffix_parts = [
         p.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
         for p in _PLUGIN_SUFFIX_PARTS
     ]
-    return os.path.join(cfg["base"], cfg["ide_dir"], *suffix_parts)
+    return [os.path.join(cfg["base"], ide_dir, *suffix_parts) for ide_dir in _IDE_DIRS]
 
 
-def _compatible_suffix() -> str:
-    """Return the path suffix from the IDE directory onward.
+def _compatible_suffixes() -> list[str]:
+    """Return the path suffixes from the IDE directories onward.
 
     This is the portion that identifies a compatible binary regardless of
     where the user's home directory is located. Used together with a home
@@ -96,7 +93,7 @@ def _compatible_suffix() -> str:
         p.format(arch=cfg["arch"], binary_name=cfg["binary_name"])
         for p in _PLUGIN_SUFFIX_PARTS
     ]
-    return os.path.join(cfg["ide_dir"], *suffix_parts)
+    return [os.path.join(ide_dir, *suffix_parts) for ide_dir in _IDE_DIRS]
 
 
 def _user_home() -> str:
@@ -105,11 +102,11 @@ def _user_home() -> str:
 
 
 def _is_compatible_path(binary_path: str) -> bool:
-    """Check whether a binary path is a compatible IntelliJ 2025.3 binary.
+    """Check whether a binary path is a compatible IntelliJ binary.
 
     Three conditions must hold:
     1. The path is under the current user's home directory.
-    2. The path contains ``IntelliJIdea2025.3`` as a path component.
+    2. The path contains one of the supported IDE dirs as a path component.
     3. The binary filename is the expected platform-specific name
        (``copilot-language-server`` or ``copilot-language-server.exe``).
 
@@ -125,9 +122,9 @@ def _is_compatible_path(binary_path: str) -> bool:
     if not normalized.startswith(home + os.sep):
         return False
 
-    # Must contain IntelliJIdea2025.3 as a path component
+    # Must contain one of the IDE_DIRS as a path component
     parts = normalized.split(os.sep)
-    if _IDE_DIR not in parts:
+    if not any(ide_dir in parts for ide_dir in _IDE_DIRS):
         return False
 
     # Must end with the correct binary name
@@ -142,12 +139,12 @@ def find_binary_from_jetbrains() -> str | None:
 
     Returns the path if it exists and is executable, or None.
     """
-    expected = _compatible_path_pattern()
-    if os.path.isfile(expected) and os.access(expected, os.X_OK):
-        logger.info("Found compatible binary on disk: %s", expected)
-        return expected
+    for expected in _compatible_path_patterns():
+        if os.path.isfile(expected) and os.access(expected, os.X_OK):
+            logger.info("Found compatible binary on disk: %s", expected)
+            return expected
 
-    logger.debug("Binary not found at expected path: %s", expected)
+    logger.debug("Binary not found at any expected paths")
     return None
 
 
@@ -155,7 +152,7 @@ def _find_binary_from_processes_unix() -> str | None:
     """Find a compatible binary from running processes on Unix (macOS/Linux).
 
     Scans ``ps`` output for copilot-language-server processes, but only
-    accepts those whose resolved path matches the IntelliJ 2025.3 plugin
+    accepts those whose resolved path matches the IntelliJ plugin
     location under the current user's home.
     """
     try:
@@ -311,7 +308,7 @@ def find_binary_from_processes() -> str | None:
     - Windows: uses PowerShell (preferred) or wmic (fallback)
 
     Only accepts binaries whose path is under the current user's home
-    directory and matches the IntelliJ 2025.3 plugin structure.
+    directory and matches the IntelliJ plugin structure.
     """
     if platform.system() == "Windows":
         return _find_binary_from_processes_windows()
