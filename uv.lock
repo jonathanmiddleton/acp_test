@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 [[package]]
 name = "acp-proxy"
 version = "0.2.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "pydantic" },

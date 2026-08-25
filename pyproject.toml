@@ -24,3 +24,6 @@ acp-proxy = "acp_proxy.__main__:main"
 asyncio_mode = "strict"
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.uv]
+package = true
